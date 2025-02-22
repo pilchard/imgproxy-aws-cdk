@@ -92,7 +92,7 @@ export class ImgproxyStack extends Stack {
 				const bucketId = `stack-generated-bucket-${s3BucketName}`;
 				const bucket = new s3.Bucket(this, bucketId, {
 					bucketName: s3BucketName,
-					removalPolicy: RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
+					removalPolicy: RemovalPolicy.RETAIN,
 					blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 					encryption: s3.BucketEncryption.S3_MANAGED,
 					enforceSSL: true,
@@ -111,17 +111,17 @@ export class ImgproxyStack extends Stack {
 		if (S3_CREATE_DEFAULT_BUCKETS) {
 			const defaultBucket = new s3.Bucket(this, "stack-generated-default-bucket", {
 				bucketName: `${this.stackName.toLocaleLowerCase()}-bucket`,
-				removalPolicy: RemovalPolicy.DESTROY,
+				removalPolicy: RemovalPolicy.RETAIN,
 				blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 				encryption: s3.BucketEncryption.S3_MANAGED,
 				enforceSSL: true,
-				autoDeleteObjects: true,
+				autoDeleteObjects: false,
 			});
 
 			accessibleS3Buckets.push(defaultBucket);
 
 			new CfnOutput(this, "OriginalImagesS3Bucket", {
-				description: "S3 bucket where original images are stored",
+				description: "S3 default bucket",
 				value: defaultBucket.bucketName,
 			});
 		}
@@ -148,11 +148,10 @@ export class ImgproxyStack extends Stack {
 				this,
 				"websiteDeliveryDistribution",
 				{
-					comment: "image optimization - sample website",
+					comment: "imgproxy - sample website",
 					defaultRootObject: "index.html",
 					defaultBehavior: {
-						// TODO: fix origin
-						origin: new origins.S3Origin(sampleWebsiteBucket),
+						origin: origins.S3BucketOrigin.withOriginAccessControl(sampleWebsiteBucket),
 						viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
 					},
 				},
@@ -168,36 +167,41 @@ export class ImgproxyStack extends Stack {
 			});
 		}
 
-		// prepare iam role for for Lambda
+		/**
+		 * Lambda Role
+		 */
 		const imgproxyLambdaRole = new iam.Role(this, "imgproxy-lamda-role", {
 			assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
 			managedPolicies: [
 				iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
 				iam.ManagedPolicy.fromAwsManagedPolicyName("AWSXrayWriteOnlyAccess"),
 			],
-			inlinePolicies: {
-				ImgproxyLambdaRolePolicy0: new iam.PolicyDocument({
-					statements: [
-						new iam.PolicyStatement({
-							sid: "CloudWatch",
-							effect: iam.Effect.ALLOW,
-							actions: ["cloudwatch:PutMetricData", "cloudwatch:PutMetricStream"],
-							resources: ["*"],
-						}),
-						new iam.PolicyStatement({
-							sid: "SystemsManagerAccess",
-							effect: iam.Effect.ALLOW,
-							actions: ["ssm:GetParametersByPath"],
-							resources: [
-								`arn:aws:ssm:${this.region}:${this.account}:parameter${SYSTEMS_MANAGER_PARAMETERS_PATH ?? this.stackName}`,
-							],
-						}),
-					],
-				}),
-			},
 		});
 
-		// `${arn:aws:s3:::saltine-s3-sandbox-images}/*
+		// IAM policy statements to attach to LambdaRole
+		const iamPolicyStatements: iam.PolicyStatement[] = [];
+
+		// CloudWatch Policy
+		const cloudWatchAccessPolicy = new iam.PolicyStatement({
+			sid: "CloudWatch",
+			effect: iam.Effect.ALLOW,
+			actions: ["cloudwatch:PutMetricData", "cloudwatch:PutMetricStream"],
+			resources: ["*"],
+		});
+		iamPolicyStatements.push(cloudWatchAccessPolicy);
+
+		// SystemManager Policy
+		const systemManagerAccessPolicy = new iam.PolicyStatement({
+			sid: "SystemsManagerAccess",
+			effect: iam.Effect.ALLOW,
+			actions: ["ssm:GetParametersByPath"],
+			resources: [
+				`arn:aws:ssm:${this.region}:${this.account}:parameter${SYSTEMS_MANAGER_PARAMETERS_PATH ?? this.stackName}`,
+			],
+		});
+		iamPolicyStatements.push(systemManagerAccessPolicy);
+
+		// S3 Bucket access - `${arn:aws:s3:::saltine-s3-sandbox-images}/*`
 		const s3AccessibleObjectArns: string[] = [];
 		for (const arn of S3_EXISTING_OBJECT_ARNS) {
 			s3AccessibleObjectArns.push(arn);
@@ -205,61 +209,70 @@ export class ImgproxyStack extends Stack {
 		for (const bucket of accessibleS3Buckets) {
 			s3AccessibleObjectArns.push(`${bucket.bucketArn}/*`);
 		}
-
 		if (s3AccessibleObjectArns.length > 0) {
-			console.log("s3AccessibleObjectArns: ", s3AccessibleObjectArns);
-			imgproxyLambdaRole.addToPolicy(
-				new iam.PolicyStatement({
-					sid: "S3Access",
-					effect: iam.Effect.ALLOW,
-					actions: ["s3:GetObject", "s3:GetObjectVersion"],
-					resources: s3AccessibleObjectArns,
-				}),
-			);
+			const s3AccessPolicy = new iam.PolicyStatement({
+				sid: "S3Access",
+				effect: iam.Effect.ALLOW,
+				actions: ["s3:GetObject", "s3:GetObjectVersion"],
+				resources: s3AccessibleObjectArns,
+			});
+			iamPolicyStatements.push(s3AccessPolicy);
 		}
 
+		// S3 Assume Role Policy
 		if (S3_ASSUME_ROLE_ARN !== undefined) {
-			imgproxyLambdaRole.addToPolicy(
-				new iam.PolicyStatement({
-					sid: "IAMRoleAssume",
-					effect: iam.Effect.ALLOW,
-					actions: ["sts:AssumeRole"],
-					resources: [S3_ASSUME_ROLE_ARN],
-				}),
-			);
+			const s3AssumeRolePolicy = new iam.PolicyStatement({
+				sid: "IAMRoleAssume",
+				effect: iam.Effect.ALLOW,
+				actions: ["sts:AssumeRole"],
+				resources: [S3_ASSUME_ROLE_ARN],
+			});
+			iamPolicyStatements.push(s3AssumeRolePolicy);
 		}
 
+		// S3 Client Side Decryption Policy
 		if (S3_CLIENT_SIDE_DECRYPTION) {
-			imgproxyLambdaRole.addToPolicy(
-				new iam.PolicyStatement({
-					sid: "KMSDecrypt",
-					effect: iam.Effect.ALLOW,
-					actions: ["kms:Decrypt"],
-					resources: [`arn:aws:kms:*:${this.account}:key/*`],
-				}),
-			);
+			const s3ClientSideDecryptPolicy = new iam.PolicyStatement({
+				sid: "KMSDecrypt",
+				effect: iam.Effect.ALLOW,
+				actions: ["kms:Decrypt"],
+				resources: [`arn:aws:kms:*:${this.account}:key/*`],
+			});
+			iamPolicyStatements.push(s3ClientSideDecryptPolicy);
 		}
 
-		// Conditions
-		const deployCloudFront = CREATE_CLOUD_FRONT_DISTRIBUTION;
-		const enableS3ClientSideDecryption = S3_CLIENT_SIDE_DECRYPTION;
-		const enableS3MultiRegion = S3_MULTI_REGION;
-		const havePathPrefix = PATH_PREFIX !== undefined;
-		const haveS3AssumeRole = S3_ASSUME_ROLE_ARN !== undefined;
+		// attach iam policy to the role assumed by Lambda
+		imgproxyLambdaRole.attachInlinePolicy(
+			new iam.Policy(this, "read-write-bucket-policy", {
+				statements: iamPolicyStatements,
+			}),
+		);
 
-		// Create Lambda for image processing
+		/**
+		 * Lambda Function
+		 */
+
+		// Environment variables
 		const imgproxyLambdaEnvironment = {
 			PORT: "8080",
 			IMGPROXY_LOG_FORMAT: "json",
 			IMGPROXY_ENV_AWS_SSM_PARAMETERS_PATH: SYSTEMS_MANAGER_PARAMETERS_PATH ?? `/${this.stackName}`,
 			IMGPROXY_USE_S3: "1",
-			...(haveS3AssumeRole ? { IMGPROXY_S3_ASSUME_ROLE_ARN: S3_ASSUME_ROLE_ARN } : {}),
-			...(enableS3MultiRegion ? { IMGPROXY_S3_MULTI_REGION: "1" } : {}),
-			...(enableS3ClientSideDecryption ? { IMGPROXY_S3_USE_DECRYPTION_CLIENT: "1" } : {}),
-			...(havePathPrefix ? { IMGPROXY_PATH_PREFIX: PATH_PREFIX } : {}),
+			...(S3_ASSUME_ROLE_ARN !== undefined
+				? { IMGPROXY_S3_ASSUME_ROLE_ARN: S3_ASSUME_ROLE_ARN }
+				: {}),
+			...(S3_MULTI_REGION ? { IMGPROXY_S3_MULTI_REGION: "1" } : {}),
+			...(S3_CLIENT_SIDE_DECRYPTION ? { IMGPROXY_S3_USE_DECRYPTION_CLIENT: "1" } : {}),
+			...(PATH_PREFIX !== undefined ? { IMGPROXY_PATH_PREFIX: PATH_PREFIX } : {}),
 			IMGPROXY_CLOUD_WATCH_SERVICE_NAME: LAMBDA_FUNCTION_NAME ?? this.stackName,
 			IMGPROXY_CLOUD_WATCH_NAMESPACE: "imgproxy",
 			IMGPROXY_CLOUD_WATCH_REGION: this.region,
+			IMGPROXY_S3_REGION: this.region,
+			IMGPROXY_ENABLE_WEBP_DETECTION: false,
+			IMGPROXY_ENFORCE_WEBP: false,
+			IMGPROXY_ENABLE_AVIF_DETECTION: false,
+			IMGPROXY_ENFORCE_AVIF: false,
+			IMGPROXY_AVIF_SPEED: 8, // 0-9 default: 8
 		};
 
 		const imgproxyLambdaProps: lambda.FunctionProps = {
@@ -270,7 +283,7 @@ export class ImgproxyStack extends Stack {
 			),
 			functionName: LAMBDA_FUNCTION_NAME ?? this.stackName,
 			memorySize: LAMBDA_MEMORY_SIZE,
-			role: imgproxyLambdaRole,
+			// role: imgproxyLambdaRole,
 			timeout: Duration.seconds(LAMBDA_TIMEOUT),
 			environment: imgproxyLambdaEnvironment,
 			tracing: lambda.Tracing.ACTIVE,
@@ -296,12 +309,12 @@ export class ImgproxyStack extends Stack {
 		});
 
 		// Create a CloudFront Function for url rewrites
-		// const urlRewriteFunction = new cloudfront.Function(this, "urlRewrite", {
-		// 	code: cloudfront.FunctionCode.fromFile({
-		// 		filePath: "functions/url-rewrite/index.min.js",
-		// 	}),
-		// 	functionName: ["urlRewriteFunction", this.node.addr].join(""),
-		// });
+		const urlRewriteFunction = new cloudfront.Function(this, "urlRewrite", {
+			code: cloudfront.FunctionCode.fromFile({
+				filePath: "functions/url-rewrite/index.min.js",
+			}),
+			functionName: ["urlRewriteFunction", this.node.addr].join(""),
+		});
 
 		const imgproxyCloudFrontCachePolicy: ICachePolicy = new cloudfront.CachePolicy(
 			this,
@@ -324,10 +337,10 @@ export class ImgproxyStack extends Stack {
 			compress: false,
 			cachePolicy: imgproxyCloudFrontCachePolicy,
 			functionAssociations: [
-				// {
-				// 	eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
-				// 	function: urlRewriteFunction,
-				// },
+				{
+					eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+					function: urlRewriteFunction,
+				},
 			],
 		};
 
