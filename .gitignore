@@ -12,3 +12,5 @@ cdk.out
 package-lock.json
 
 .env
+
+.dist

@@ -19,6 +19,7 @@ import {
 
 import type { StackProps } from "aws-cdk-lib";
 import type { CfnDistribution, ICachePolicy } from "aws-cdk-lib/aws-cloudfront";
+import { FunctionUrlAuthType } from "aws-cdk-lib/aws-lambda";
 import type { Construct } from "constructs";
 import type { ConfigProps } from "./config";
 
@@ -50,7 +51,7 @@ type LambdaEnv = {
 	maxImageSize: string;
 };
 
-export class ImageOptimizationStack extends Stack {
+export class ImgproxyStack extends Stack {
 	constructor(scope: Construct, id: string, props: AwsEnvStackProps) {
 		super(scope, id, props);
 
@@ -60,6 +61,7 @@ export class ImageOptimizationStack extends Stack {
 			config: {
 				LAMBDA_FUNCTION_NAME,
 				LAMBDA_IMAGE_URI,
+				LAMBDA_REPOSITORY_ARN,
 				LAMBDA_ARCHITECTURE,
 				LAMBDA_MEMORY_SIZE,
 				LAMBDA_TIMEOUT,
@@ -87,13 +89,14 @@ export class ImageOptimizationStack extends Stack {
 
 		if (S3_CREATE_BUCKETS.length > 0) {
 			for (const s3BucketName of S3_CREATE_BUCKETS) {
-				const bucket = new s3.Bucket(this, `stack-generated-bucket-${s3BucketName}`, {
+				const bucketId = `stack-generated-bucket-${s3BucketName}`;
+				const bucket = new s3.Bucket(this, bucketId, {
 					bucketName: s3BucketName,
 					removalPolicy: RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
 					blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 					encryption: s3.BucketEncryption.S3_MANAGED,
 					enforceSSL: true,
-					autoDeleteObjects: true,
+					autoDeleteObjects: false,
 				});
 
 				accessibleS3Buckets.push(bucket);
@@ -103,9 +106,11 @@ export class ImageOptimizationStack extends Stack {
 				description: "S3 bucket where original images are stored",
 				value: `Created ${accessibleS3Buckets.length} buckets: [${accessibleS3Buckets.map((o) => o.bucketName).join(", ")}]`,
 			});
-		} else if (S3_CREATE_DEFAULT_BUCKETS) {
+		}
+
+		if (S3_CREATE_DEFAULT_BUCKETS) {
 			const defaultBucket = new s3.Bucket(this, "stack-generated-default-bucket", {
-				bucketName: `${this.stackName}-image-bucket`,
+				bucketName: `${this.stackName.toLocaleLowerCase()}-bucket`,
 				removalPolicy: RemovalPolicy.DESTROY,
 				blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 				encryption: s3.BucketEncryption.S3_MANAGED,
@@ -167,7 +172,7 @@ export class ImageOptimizationStack extends Stack {
 		const imgproxyLambdaRole = new iam.Role(this, "imgproxy-lamda-role", {
 			assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
 			managedPolicies: [
-				iam.ManagedPolicy.fromAwsManagedPolicyName("AWSLambdaBasicExecutionRole"),
+				iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
 				iam.ManagedPolicy.fromAwsManagedPolicyName("AWSXrayWriteOnlyAccess"),
 			],
 			inlinePolicies: {
@@ -184,7 +189,7 @@ export class ImageOptimizationStack extends Stack {
 							effect: iam.Effect.ALLOW,
 							actions: ["ssm:GetParametersByPath"],
 							resources: [
-								`arn:aws:ssm:${this.region}:${this.account}:parameter/${SYSTEMS_MANAGER_PARAMETERS_PATH ?? this.stackName}`,
+								`arn:aws:ssm:${this.region}:${this.account}:parameter${SYSTEMS_MANAGER_PARAMETERS_PATH ?? this.stackName}`,
 							],
 						}),
 					],
@@ -192,14 +197,17 @@ export class ImageOptimizationStack extends Stack {
 			},
 		});
 
-		// add
-
 		// `${arn:aws:s3:::saltine-s3-sandbox-images}/*
-		const s3AccessibleObjectArns = [
-			...S3_EXISTING_OBJECT_ARNS,
-			...accessibleS3Buckets.map((bucket) => `${bucket.bucketArn}/*`),
-		];
+		const s3AccessibleObjectArns: string[] = [];
+		for (const arn of S3_EXISTING_OBJECT_ARNS) {
+			s3AccessibleObjectArns.push(arn);
+		}
+		for (const bucket of accessibleS3Buckets) {
+			s3AccessibleObjectArns.push(`${bucket.bucketArn}/*`);
+		}
+
 		if (s3AccessibleObjectArns.length > 0) {
+			console.log("s3AccessibleObjectArns: ", s3AccessibleObjectArns);
 			imgproxyLambdaRole.addToPolicy(
 				new iam.PolicyStatement({
 					sid: "S3Access",
@@ -232,46 +240,6 @@ export class ImageOptimizationStack extends Stack {
 			);
 		}
 
-		const imgproxyLambdaCfnRole = new iam.CfnRole(this, "imgproxy-lamda-role", {
-			assumeRolePolicyDocument: {
-				Version: "2012-10-17",
-				Statement: [
-					{
-						Action: ["sts:AssumeRole"],
-						Effect: "Allow",
-						Principal: {
-							Service: ["lambda.amazonaws.com"],
-						},
-					},
-				],
-			},
-			managedPolicyArns: [
-				"arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-				"arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess",
-			],
-			policies: [
-				{
-					policyName: "ImgproxyFunctionRolePolicy0",
-					policyDocument: {
-						Statement: [
-							{
-								Sid: "CloudWatch",
-								Effect: "Allow",
-								Action: ["cloudwatch:PutMetricData", "cloudwatch:PutMetricStream"],
-								Resource: ["*"],
-							},
-						],
-					},
-				},
-			],
-			tags: [
-				{
-					key: "lambda:createdBy",
-					value: "CDK",
-				},
-			],
-		});
-
 		// Conditions
 		const deployCloudFront = CREATE_CLOUD_FRONT_DISTRIBUTION;
 		const enableS3ClientSideDecryption = S3_CLIENT_SIDE_DECRYPTION;
@@ -297,7 +265,9 @@ export class ImageOptimizationStack extends Stack {
 		const imgproxyLambdaProps: lambda.FunctionProps = {
 			runtime: lambda.Runtime.FROM_IMAGE,
 			handler: lambda.Handler.FROM_IMAGE,
-			code: lambda.Code.fromEcrImage(new ecr.Repository(this, LAMBDA_IMAGE_URI)),
+			code: lambda.Code.fromEcrImage(
+				ecr.Repository.fromRepositoryArn(this, "imgproxy-ecr-repository", LAMBDA_REPOSITORY_ARN),
+			),
 			functionName: LAMBDA_FUNCTION_NAME ?? this.stackName,
 			memorySize: LAMBDA_MEMORY_SIZE,
 			role: imgproxyLambdaRole,
@@ -312,7 +282,10 @@ export class ImageOptimizationStack extends Stack {
 		const imgproxyLambda = new lambda.Function(this, "imgproxy", imgproxyLambdaProps);
 
 		// Enable Lambda URL
-		const imgproxyLambdaURL = imgproxyLambda.addFunctionUrl();
+		const imgproxyLambdaURL = imgproxyLambda.addFunctionUrl({
+			authType: lambda.FunctionUrlAuthType.AWS_IAM,
+			invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
+		});
 
 		// Leverage CDK Intrinsics to get the hostname of the Lambda URL
 		const imgproxyLambdaDomainName = Fn.parseDomainName(imgproxyLambdaURL.url);
@@ -323,12 +296,12 @@ export class ImageOptimizationStack extends Stack {
 		});
 
 		// Create a CloudFront Function for url rewrites
-		const urlRewriteFunction = new cloudfront.Function(this, "urlRewrite", {
-			code: cloudfront.FunctionCode.fromFile({
-				filePath: "functions/url-rewrite/index.js",
-			}),
-			functionName: `urlRewriteFunction${this.node.addr}`,
-		});
+		// const urlRewriteFunction = new cloudfront.Function(this, "urlRewrite", {
+		// 	code: cloudfront.FunctionCode.fromFile({
+		// 		filePath: "functions/url-rewrite/index.min.js",
+		// 	}),
+		// 	functionName: ["urlRewriteFunction", this.node.addr].join(""),
+		// });
 
 		const imgproxyCloudFrontCachePolicy: ICachePolicy = new cloudfront.CachePolicy(
 			this,
@@ -351,10 +324,10 @@ export class ImageOptimizationStack extends Stack {
 			compress: false,
 			cachePolicy: imgproxyCloudFrontCachePolicy,
 			functionAssociations: [
-				{
-					eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
-					function: urlRewriteFunction,
-				},
+				// {
+				// 	eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+				// 	function: urlRewriteFunction,
+				// },
 			],
 		};
 
@@ -388,8 +361,9 @@ export class ImageOptimizationStack extends Stack {
 			);
 			imageDeliveryCacheBehaviorConfig.responseHeadersPolicy = imageResponseHeadersPolicy;
 		}
+
 		const imageDelivery = new cloudfront.Distribution(this, "imageDeliveryDistribution", {
-			comment: "image optimization - image delivery",
+			comment: "imgproxy - image delivery",
 			defaultBehavior: imageDeliveryCacheBehaviorConfig,
 		});
 

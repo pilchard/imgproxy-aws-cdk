@@ -1,7 +1,7 @@
-import * as dotenv from "dotenv";
 import path = require("node:path");
 import { getOriginShieldRegion } from "./origin-shield";
 
+import * as dotenv from "dotenv";
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 export type ConfigProps = {
@@ -12,6 +12,10 @@ export type ConfigProps = {
 	 * The URI of the Docker image to use for the function. The image must be in an Amazon Elastic Container Registry (Amazon ECR) repository.
 	 */
 	readonly LAMBDA_IMAGE_URI: string;
+	/**
+	 * The ARN of the ECR repository to use for the function. The image must be in an Amazon Elastic Container Registry (Amazon ECR) repository.
+	 */
+	readonly LAMBDA_REPOSITORY_ARN: string;
 	/**
 	 * A name for the function. If you don't specify a name, stack name is used.
 	 * @default undefined
@@ -108,6 +112,7 @@ export const getConfig = (): ConfigProps => ({
 	// LAMBDA
 	LAMBDA_FUNCTION_NAME: process.env.IMGPROXY_FUNCTION_NAME || undefined,
 	LAMBDA_IMAGE_URI: process.env.IMGPROXY_IMAGE_URI || "",
+	LAMBDA_REPOSITORY_ARN: process.env.LAMBDA_REPOSITORY_ARN || "",
 	LAMBDA_ARCHITECTURE: process.env.IMGPROXY_ARCHITECTURE || "ARM64",
 	LAMBDA_MEMORY_SIZE: parseNumber(process.env.IMGPROXY_MEMORY_SIZE, 2048),
 	LAMBDA_TIMEOUT: parseNumber(process.env.IMGPROXY_TIMEOUT, 60),
@@ -115,8 +120,8 @@ export const getConfig = (): ConfigProps => ({
 	SYSTEMS_MANAGER_PARAMETERS_PATH: process.env.SYSTEMS_MANAGER_PARAMETERS_PATH || undefined,
 	// S3
 	S3_CREATE_DEFAULT_BUCKETS: parseBoolean(process.env.S3_CREATE_DEFAULT_BUCKETS, false),
-	S3_CREATE_BUCKETS: (process.env.S3_CREATE_BUCKETS ?? "").split(",") || [],
-	S3_EXISTING_OBJECT_ARNS: (process.env.S3_ACCESSIBLE_OBJECT_ARNS ?? "").split(","),
+	S3_CREATE_BUCKETS: parseArray(process.env.S3_CREATE_BUCKETS),
+	S3_EXISTING_OBJECT_ARNS: parseArray(process.env.S3_ACCESSIBLE_OBJECT_ARNS),
 	S3_ASSUME_ROLE_ARN: process.env.S3_ASSUME_ROLE_ARN || undefined,
 	S3_MULTI_REGION: parseBoolean(process.env.S3_MULTI_REGION, false),
 	S3_CLIENT_SIDE_DECRYPTION: parseBoolean(process.env.S3_CLIENT_SIDE_DECRYPTION, false),
@@ -131,15 +136,15 @@ export const getConfig = (): ConfigProps => ({
 	DEPLOY_SAMPLE_WEBSITE: parseBoolean(process.env.DEPLOY_SAMPLE_WEBSITE, false),
 });
 
-const parseNumber = (str: string | undefined, fallback: number): number => {
+export function parseNumber(str: string | undefined, fallback: number): number {
 	if (!str) return fallback;
 
 	const int = Number.parseInt(str, 10);
 
 	return Number.isNaN(int) ? fallback : int;
-};
+}
 
-const parseBoolean = (str: string | undefined, fallback: boolean): boolean => {
+export function parseBoolean(str: string | undefined, fallback: boolean): boolean {
 	if (!str) {
 		return fallback;
 	}
@@ -153,4 +158,13 @@ const parseBoolean = (str: string | undefined, fallback: boolean): boolean => {
 	}
 
 	return fallback;
-};
+}
+export function parseArray(str: string | undefined): string[] {
+	if (str === undefined || str?.trim() === "") {
+		return [];
+	}
+	return str
+		.split(",")
+		.map((s) => s.trim())
+		.filter((s) => s !== "");
+}
