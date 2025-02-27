@@ -1,11 +1,8 @@
-import { writeFileSync } from "node:fs";
-import path = require("node:path");
-import * as dotenv from "dotenv";
-import { parseBoolean } from "../../lib/config";
+import { createWriteStream, writeFileSync } from "node:fs";
+import { getConfig } from "../../../lib/config";
 
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
-
-const enableProOptions = parseBoolean(process.env.ENABLE_PRO_OPTIONS, false);
+const config = getConfig();
+const { ENABLE_PRO_OPTIONS } = config;
 
 export type ImgproxyBaseOption = {
 	full: string;
@@ -135,4 +132,4 @@ function indexAndWrite(arr: ImgproxyOption[], enableProOptions: boolean) {
 	writeFileSync("./functions/url-rewrite/processing-options.json", JSON.stringify(result), "utf8");
 }
 
-indexAndWrite(imgproxyProcessingOptions, enableProOptions);
+indexAndWrite(imgproxyProcessingOptions, ENABLE_PRO_OPTIONS);

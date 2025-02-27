@@ -5,7 +5,7 @@
     "strictNullChecks": true,
     "noImplicitThis": true,
     "alwaysStrict": true,
-    "noUnusedLocals": true,
+    "noUnusedLocals": false,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
@@ -13,20 +13,21 @@
     "inlineSources": true,
     "experimentalDecorators": true,
     "strictPropertyInitialization": true,
+    "resolveJsonModule": true,
     "esModuleInterop": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
     // Emit
     "removeComments": true,
     "noEmit": true,
     "declaration": false,
-    "target": "ESNext",
-    "module": "ES2022",
+    "target": "ESNext", // MUST BE ES5 for CloudFront Function support  https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-javascript-runtime-features.html#writing-functions-javascript-features-core
+    "module": "CommonJS", // Beware CloudFront JS environment doesn't contain all commonjs runtime modules    
     "lib": [
-      "ESNext"
+      "ES5",
+      "ES2021"
     ],
   },
-  "exclude": [
-    "functions/**/*"
+  "include": [
+    "**/*.ts",
+    "../scripts/functions/url-rewrite/processing-options.ts"
   ],
 }

@@ -1,8 +1,18 @@
+/**
+ * TODO:
+ * - change to ESM import statements
+ * - use JSON kvs value for configuration
+ * - inline extraneous functions
+ * - test/streamline code for aws-js2.0
+ */
 // biome-ignore lint/style/useNodejsImportProtocol: <explanation>
 const crypto = require("crypto");
 const cf = require("cloudfront");
 
-import type { ImgproxyBaseOption, ImgproxyMetaOption, ImgproxyOption } from "./processing-options";
+import type {
+	ImgproxyMetaOption,
+	ImgproxyOption,
+} from "../../scripts/functions/url-rewrite/processing-options";
 
 type Option<T, E> =
 	| {
@@ -14,9 +24,11 @@ type Option<T, E> =
 			none: E;
 	  };
 
-const imgproxyKey = "dev.key";
-const imgproxySalt = "dev.salt";
-const imgproxyArgumentsSeparotor = "dev.arguments_separator";
+const imgproxyKey = "imgproxy_key";
+const imgproxySalt = "imgproxy_salt";
+const imgproxySignatureSize = "imgproxy_signature_size";
+const imgproxyTrustedSignatures = "imgproxy_trusted_signatures";
+const imgproxyArgumentsSeparotor = "imgproxy_arguments_separator";
 
 const indexedOptions: Record<string, ImgproxyOption> = {
 	resize: {
@@ -60,9 +72,21 @@ const indexedOptions: Record<string, ImgproxyOption> = {
 	el: { full: "enlarge", short: "el" },
 	extend: { full: "extend", short: "ex" },
 	ex: { full: "extend", short: "ex" },
-	extend_aspect_ratio: { full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
-	exar: { full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
-	extend_ar: { full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
+	extend_aspect_ratio: {
+		full: "extend_aspect_ratio",
+		short: "exar",
+		alt: "extend_ar",
+	},
+	exar: {
+		full: "extend_aspect_ratio",
+		short: "exar",
+		alt: "extend_ar",
+	},
+	extend_ar: {
+		full: "extend_aspect_ratio",
+		short: "exar",
+		alt: "extend_ar",
+	},
 	gravity: { full: "gravity", short: "g" },
 	g: { full: "gravity", short: "g" },
 	crop: { full: "crop", short: "c" },
@@ -121,17 +145,26 @@ const indexedOptions: Record<string, ImgproxyOption> = {
 	msfs: { full: "max_src_file_size", short: "msfs" },
 	max_animation_frames: { full: "max_animation_frames", short: "maf" },
 	maf: { full: "max_animation_frames", short: "maf" },
-	max_animation_frame_resolution: { full: "max_animation_frame_resolution", short: "mafr" },
+	max_animation_frame_resolution: {
+		full: "max_animation_frame_resolution",
+		short: "mafr",
+	},
 	mafr: { full: "max_animation_frame_resolution", short: "mafr" },
 };
 
-function validate_signature(salt: string, target: string, key: string, signature: string) {
-	if (!_verify(salt, target, key, signature)) {
+function validate_signature(
+	signature: string,
+	salt: string,
+	target: string,
+	key: string,
+	size: number,
+) {
+	if (!_verify(signature, salt, target, key, size)) {
 		throw new Error("Signature verification failed");
 	}
 }
-function _verify(salt: string, target: string, key: string, signature: string) {
-	return _stringTimingSafeEqual(signature, _sign(salt, target, key));
+function _verify(signature: string, salt: string, target: string, key: string, size: number) {
+	return _stringTimingSafeEqual(signature, _sign(salt, target, key, size));
 }
 function _stringTimingSafeEqual(a: string, b: string) {
 	if (a.length !== b.length) {
@@ -145,19 +178,22 @@ function _stringTimingSafeEqual(a: string, b: string) {
 	}
 	return 0 === xor;
 }
-function _sign(salt: string, target: string, key: string) {
+function _sign(salt: string, target: string, key: string, size: number) {
 	const hmac = crypto.createHmac("sha256", _hexDecode(key));
 	hmac.update(_hexDecode(salt));
 	hmac.update(target);
-	return hmac.digest("base64url");
+
+	// return hmac.digest("base64url");
+	return Buffer.from(hmac.digest().slice(0, size)).toString("base64url");
 }
+
 function _hexDecode(hex: string) {
 	return Buffer.from(hex, "hex");
 }
 function _trimSeparators(urlStr: string) {
 	return urlStr.replaceAll(/^\/|\/$/g, "");
 }
-async function handler(event: AWSCloudFrontFunction.Event) {
+export async function handler(event: AWSCloudFrontFunction.Event) {
 	const request = event.request;
 
 	const kvsResponse = await getEnvironmentVariables();
@@ -168,6 +204,10 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 
 	const IMGPROXY_SALT = kvsResponse.some.IMGPROXY_SALT;
 	const IMGPROXY_KEY = kvsResponse.some.IMGPROXY_KEY;
+	const IMGPROXY_SIGNATURE_SIZE =
+		Number.parseInt(kvsResponse.some.IMGPROXY_SIGNATURE_SIZE, 10) || 32;
+	const IMGPROXY_TRUSTED_SIGNATURES = kvsResponse.some.IMGPROXY_TRUSTED_SIGNATURES.split(",");
+
 	const IMGPROXY_ARGUMENTS_SEPARATOR = kvsResponse.some.IMGPROXY_ARGUMENTS_SEPARATOR;
 
 	const imgproxyUriRegexp = new RegExp(
@@ -190,20 +230,18 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 	const sourceUrlType = uriRegexpResult[3] !== undefined ? uriRegexpResult[3] : "";
 	const sourceUrl = uriRegexpResult[4] !== undefined ? uriRegexpResult[4] : "";
 
-	try {
-		validate_signature(
-			IMGPROXY_SALT,
-			`/${processingOptionsString}${sourceUrlType}${sourceUrl}`,
-			IMGPROXY_KEY,
-			signature,
-		);
-	} catch (err) {
-		return sendError(
-			403,
-			"Forbidden",
-			"",
-			new Error("Signature verification failed", { cause: err }),
-		);
+	if (!IMGPROXY_TRUSTED_SIGNATURES.includes(signature)) {
+		try {
+			validate_signature(
+				IMGPROXY_SALT,
+				`/${processingOptionsString}${sourceUrlType}${sourceUrl}`,
+				IMGPROXY_KEY,
+				signature,
+				IMGPROXY_SIGNATURE_SIZE,
+			);
+		} catch (err) {
+			return sendError(403, "Forbidden", "", new Error("Signature verification failed"));
+		}
 	}
 
 	const processingOptionsMap = Object.create(null);
@@ -257,7 +295,7 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 	}
 	const normalizedOptionsString = normalizedOptionsArr.join("/");
 	const newImgproxyPath = `/${normalizedOptionsString}/${sourceUrlType}${sourceUrl}`;
-	const newUri = `/${_sign(IMGPROXY_SALT, newImgproxyPath, IMGPROXY_KEY)}${newImgproxyPath}`;
+	const newUri = `/${_sign(IMGPROXY_SALT, newImgproxyPath, IMGPROXY_KEY, IMGPROXY_SIGNATURE_SIZE)}${newImgproxyPath}`;
 	request.uri = newUri;
 	return request;
 }
@@ -265,8 +303,16 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 async function getEnvironmentVariables(): Promise<Option<Record<string, string>, Error>> {
 	const kvsHandle = cf.kvs();
 	try {
+		// signing
 		const IMGPROXY_SALT = await kvsHandle.get(imgproxySalt, { format: "string" });
 		const IMGPROXY_KEY = await kvsHandle.get(imgproxyKey, { format: "string" });
+		const IMGPROXY_SIGNATURE_SIZE = await kvsHandle.get(imgproxySignatureSize, {
+			format: "string",
+		});
+		const IMGPROXY_TRUSTED_SIGNATURES = await kvsHandle.get(imgproxyTrustedSignatures, {
+			format: "string",
+		});
+		// processing
 		const IMGPROXY_ARGUMENTS_SEPARATOR = await kvsHandle.get(imgproxyArgumentsSeparotor, {
 			format: "string",
 		});
@@ -274,11 +320,13 @@ async function getEnvironmentVariables(): Promise<Option<Record<string, string>,
 			some: {
 				IMGPROXY_SALT: IMGPROXY_SALT,
 				IMGPROXY_KEY: IMGPROXY_KEY,
+				IMGPROXY_SIGNATURE_SIZE: IMGPROXY_SIGNATURE_SIZE,
+				IMGPROXY_TRUSTED_SIGNATURES: IMGPROXY_TRUSTED_SIGNATURES,
 				IMGPROXY_ARGUMENTS_SEPARATOR: IMGPROXY_ARGUMENTS_SEPARATOR,
 			},
 		};
 	} catch (err) {
-		return { none: new Error("Failed to retrieve value from key value store", { cause: err }) };
+		return { none: new Error("Failed to retrieve value from key value store") };
 	}
 }
 

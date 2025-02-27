@@ -12,5 +12,11 @@ cdk.out
 package-lock.json
 
 .env
+*.env
 
-.dist
+# Build directories
+.dist/
+.build/
+
+# reference
+ref.*
