@@ -7,7 +7,6 @@
  * [ ] handle multiple `preset` options
  */
 
-// biome-ignore lint/suspicious/noRedundantUseStrict: <explanation>
 ("use strict");
 import crypto from "crypto";
 import cf from "cloudfront";
@@ -18,25 +17,9 @@ import type {
 } from "../../scripts/functions/url-rewrite/processing-options";
 
 /**
- * L O G G I N G  S E T U P
+ * D A T A
  */
 
-let LOG_LEVEL = resolveLogLevel("error");
-
-const defaultConfig: UrlRewrite.Config = {
-	imgproxy_salt: "",
-	imgproxy_key: "",
-	imgproxy_signature_size: 32,
-	imgproxy_trusted_signatures: [],
-	imgproxy_arguments_separator: ":",
-	log_level: "none",
-};
-
-/**
- * D A T A  S E T U P
- */
-
-const kvsHandle = cf.kvs();
 const indexedOptions: Record<string, ImgproxyOption> = {
 	resize: {
 		full: "resize",
@@ -202,17 +185,38 @@ const optionPriority = [
 	"maf",
 	"mafr",
 ];
-
 function optionPriorityOrder(a: string[], b: string[]) {
 	return optionPriority.indexOf(a[0]) - optionPriority.indexOf(b[0]);
 }
+const logLevelMap: Record<UrlRewrite.LogLevel, { prefix: string; index: number }> = {
+	none: { prefix: "", index: 0 },
+	error: { prefix: "[ERROR]", index: 1 },
+	warn: { prefix: "[WARN]", index: 2 },
+	info: { prefix: "[INFO]", index: 3 },
+	debug: { prefix: "[DEBUG]", index: 4 },
+};
+
+/**
+ * G L O B A L S
+ */
+
+let LOG_LEVEL = resolveLogLevel("error");
+const kvsHandle = cf.kvs();
+const defaultConfig: UrlRewrite.Config = {
+	imgproxy_salt: "",
+	imgproxy_key: "",
+	imgproxy_signature_size: 32,
+	imgproxy_trusted_signatures: [],
+	imgproxy_arguments_separator: ":",
+	log_level: "none",
+};
 
 /**
  * H A N D L E R
  */
 
 async function handler(event: AWSCloudFrontFunction.Event) {
-	debugLog(`In handler with event: ${JSON.stringify(event)}`, "debug");
+	logLine(`In handler with event: ${JSON.stringify(event)}`, "debug");
 
 	const kvsResponse = await kvsGet("config", kvsHandle, "json");
 
@@ -220,7 +224,7 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 		return sendError(403, "Forbidden", "", kvsResponse.none);
 	}
 
-	debugLog("Config fetched from KVS", "info");
+	logLine("Config fetched from KVS", "info");
 
 	const config = Object.assign(defaultConfig, kvsResponse.some as UrlRewrite.Config);
 
@@ -242,14 +246,14 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 	const signingEnabled = !!(IMGPROXY_KEY.length && IMGPROXY_SALT.length);
 
 	if (!signingEnabled) {
-		debugLog("Signing: imgproxy signing disabled", "warn");
+		logLine("Signing: imgproxy signing disabled", "warn");
 	}
 
 	const request = event.request;
 	const requestUri = request.uri;
 
-	debugLog(`Source: ${request.headers.host.value}${request.uri}`, "debug");
-	debugLog("parsing uri", "info");
+	logLine(`Source: ${request.headers.host.value}${request.uri}`, "debug");
+	logLine("parsing uri", "info");
 
 	const imgproxyUriRegexp = new RegExp(
 		`^\\/([^\\/]+)\\/((?:[a-z]+\\${IMGPROXY_ARGUMENTS_SEPARATOR}[^\\/]+\\/)+)?(plain\\/|enc\\/)?(.+)`,
@@ -274,8 +278,8 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 		return res;
 	}
 
-	debugLog("uri parsing successful", "info");
-	debugLog(`uri parsing result: ${JSON.stringify(uriRegexpResult)}`, "debug");
+	logLine("uri parsing successful", "info");
+	logLine(`uri parsing result: ${JSON.stringify(uriRegexpResult)}`, "debug");
 
 	const signature = uriRegexpResult[1];
 	const processingOptionsString = uriRegexpResult[2] ?? "";
@@ -304,10 +308,10 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 	const normalizedOptionMap: Record<string, [number, [string, string]]> = {};
 	let mapOrder = 0;
 	let presetCount = 0;
-	debugLog("mapping processing options", "info");
+	logLine("mapping processing options", "info");
 	for (let i = 0; i < optionStrings.length; i++) {
 		const optionArr = optionStrings[i].split(IMGPROXY_ARGUMENTS_SEPARATOR);
-		debugLog(
+		logLine(
 			`parsed option: ${JSON.stringify({
 				index: i,
 				option_arr: optionArr,
@@ -336,7 +340,7 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 									mapOrder++,
 									[preferredKey, individualOptionArgs.join(IMGPROXY_ARGUMENTS_SEPARATOR)],
 								];
-								debugLog(
+								logLine(
 									`mapped meta option: og:${metaOption}:pk:${preferredKey}:args:${normalizedOptionMap[preferredKey]}`,
 									"debug",
 								);
@@ -359,7 +363,7 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 						];
 					}
 
-					debugLog(
+					logLine(
 						`mapped option: og:${option}:pk:${preferredKey}:args:${normalizedOptionMap[preferredKey]}`,
 						"debug",
 					);
@@ -368,46 +372,68 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 		}
 	}
 
-	debugLog(`option_partitions: ${JSON.stringify(normalizedOptionMap)}`, "debug");
-	debugLog("normalizing options map", "info");
+	logLine(`option_partitions: ${JSON.stringify(normalizedOptionMap)}`, "debug");
+	logLine("normalizing options map", "info");
 
 	const optionEntries = Object.values(normalizedOptionMap)
 		.sort((a, b) => a[0] - b[0])
 		.map((v) => v[1]);
 
-	debugLog(`option_entries: ${JSON.stringify(optionEntries)}`, "debug");
+	logLine(`option_entries: ${JSON.stringify(optionEntries)}`, "debug");
 
-	const optionPartitions = optionEntries.reduce(
-		(result, entry) => {
-			if (entry[0] === "preset" || entry[0] === "pr") {
-				result[result.length] = [entry];
-				result[result.length] = [];
-			} else {
-				result[result.length - 1].push(entry);
-			}
-			return result;
-		},
-		[[]] as [string, string][][],
-	);
+	const partitionedStrings: string[] = [];
+	let temp: [string, string][] = [];
+	const joinEntry = (entry: [string, string]) => entry.join(IMGPROXY_ARGUMENTS_SEPARATOR);
+	const joinPath = (pathArr: string[]) => pathArr.join("/");
+	for (let i = 0; i < optionEntries.length; i++) {
+		const entry = optionEntries[i];
+		if (entry[0] === "pr") {
+			temp.sort(optionPriorityOrder).push(entry);
+			partitionedStrings.push(joinPath(temp.map(joinEntry)));
+			temp = [];
+		} else {
+			temp.push(entry);
+		}
+	}
+	if (temp.length) {
+		partitionedStrings.push(joinPath(temp.sort(optionPriorityOrder).map(joinEntry)));
+	}
 
-	debugLog(`option_partitions: ${JSON.stringify(optionPartitions)}`, "debug");
+	logLine(`normalized_option_string: ${JSON.stringify(partitionedStrings)}`, "debug");
 
-	const normalizedOptionsString = optionPartitions
-		.reduce((result, partition) => {
-			if (partition.length) {
-				result.push(
-					partition
-						.sort(optionPriorityOrder)
-						.map((entry) => entry.join(IMGPROXY_ARGUMENTS_SEPARATOR))
-						.join("/"),
-				);
-			}
-			return result;
-		}, [] as string[])
-		.join("/");
+	const normalizedOptionsString = joinPath(partitionedStrings);
 
-	debugLog("options map normalized", "info");
-	debugLog(`normalized_option_string: ${normalizedOptionsString}`, "debug");
+	// const optionPartitions = optionEntries.reduce(
+	// 	(result, entry) => {
+	// 		if (entry[0] === "preset" || entry[0] === "pr") {
+	// 			result[result.length] = [entry];
+	// 			result[result.length] = [];
+	// 		} else {
+	// 			result[result.length - 1].push(entry);
+	// 		}
+	// 		return result;
+	// 	},
+	// 	[[]] as [string, string][][],
+	// );
+
+	// debugLog(`option_partitions: ${JSON.stringify(optionPartitions)}`, "debug");
+
+	// const normalizedOptionsString = optionPartitions
+	// 	.reduce((result, partition) => {
+	// 		if (partition.length) {
+	// 			result.push(
+	// 				partition
+	// 					.sort(optionPriorityOrder)
+	// 					.map((entry) => entry.join(IMGPROXY_ARGUMENTS_SEPARATOR))
+	// 					.join("/"),
+	// 			);
+	// 		}
+	// 		return result;
+	// 	}, [] as string[])
+	// 	.join("/");
+
+	logLine("options map normalized", "info");
+	logLine(`normalized_option_string: ${normalizedOptionsString}`, "debug");
 
 	const newImgproxyPath = `/${normalizedOptionsString}/${sourceUrlType}${sourceUrl}`;
 	const resultUri = `/${_sign(IMGPROXY_SALT, newImgproxyPath, IMGPROXY_KEY, IMGPROXY_SIGNATURE_SIZE)}${newImgproxyPath}`;
@@ -428,7 +454,6 @@ async function kvsGet<K extends keyof KeyValueStore.ValueFormat>(
 	handle: KeyValueStore.Handle,
 	format: K,
 ): Promise<Option<KeyValueStore.ValueFormat[K], Error>> {
-	const kvsHandle: KeyValueStore.Handle = cf.kvs();
 	try {
 		return {
 			some: await handle.get(`${key}`, { format: format }),
@@ -486,30 +511,23 @@ function _sign(salt: string, target: string, key: string, size: number) {
 function _hexDecode(hex: string) {
 	return Buffer.from(hex, "hex");
 }
+
 function _trimSeparators(str: string) {
 	return str.replaceAll(/^\/|\/$/g, "");
 }
 
 /**
- * D E B U G
+ * L O G G I N G
  */
 
 function resolveLogLevel(level: UrlRewrite.LogLevel): number {
-	return ["none", "error", "warn", "info", "debug"].indexOf(level) ?? Number.POSITIVE_INFINITY;
+	return logLevelMap[level]?.index ?? Number.POSITIVE_INFINITY;
 }
 
-const LOG_PREFIX: Partial<Record<UrlRewrite.LogLevel, string>> = {
-	error: "[ERROR]",
-	warn: "[WARN]",
-	info: "[INFO]",
-	debug: "[DEBUG]",
-};
-
 // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-function debugLog(logline: any, level: UrlRewrite.LogLevel) {
-	const prefix = `${LOG_PREFIX[level] ? `${LOG_PREFIX[level]} ` : ""}`;
+function logLine(logline: any, level: UrlRewrite.LogLevel) {
 	if (resolveLogLevel(level) <= LOG_LEVEL) {
-		console.log(`${prefix}${logline}`);
+		console.log(`${logLevelMap[level].prefix}${logline}`);
 	}
 }
 
@@ -534,8 +552,8 @@ function setDebugInfo(
  */
 
 function sendError(statusCode: number, statusText: string, body: string, error: Error) {
-	debugLog(body, "error");
-	debugLog(error, "error");
+	logLine(body, "error");
+	logLine(error, "error");
 	return { statusCode, statusText, body } as AWSCloudFrontFunction.Response;
 }
 
