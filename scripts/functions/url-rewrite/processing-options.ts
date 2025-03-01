@@ -117,10 +117,18 @@ const imgproxyProcessingOptions: ImgproxyOption[] = [
 
 function indexAndWrite(arr: ImgproxyOption[], enableProOptions: boolean) {
 	const result = Object.create(null);
+	const preferredKeys: string[] = [];
 	for (const option of arr) {
 		if (!enableProOptions && option.pro) {
 			continue;
 		}
+
+		const keys = (["full", "short", "alt"] as const)
+			.map((k) => option[k])
+			.filter((v) => v !== undefined);
+		const preferredKey = keys.reduce((r, k) => (k.length < r.length ? k : r));
+		console.log(preferredKey);
+		preferredKeys.push(preferredKey);
 
 		for (const key of ["full", "short", "alt"] as const) {
 			const indexKey = option[key];
@@ -131,6 +139,11 @@ function indexAndWrite(arr: ImgproxyOption[], enableProOptions: boolean) {
 	}
 
 	writeFileSync("./functions/url-rewrite/processing-options.json", JSON.stringify(result), "utf8");
+	writeFileSync(
+		"./functions/url-rewrite/processing-options-order.json",
+		JSON.stringify(preferredKeys),
+		"utf8",
+	);
 }
 
 indexAndWrite(imgproxyProcessingOptions, ENABLE_PRO_OPTIONS);
