@@ -4,12 +4,12 @@
             "syntax": "typescript",
             "tsx": false
         },
-        "target": "es2018",
+        "target": "es2022",
         "loose": false,
         "minify": {
             "compress": false,
             "mangle": {
-                "toplevel": false,
+                "toplevel": true,
                 "keep_classnames": false,
                 "keep_fnames": false,
                 "keep_private_props": false,
@@ -22,5 +22,5 @@
         "type": "es6"
     },
     "minify": true,
-    "isModule": "unknown"
+    "isModule": true
 }

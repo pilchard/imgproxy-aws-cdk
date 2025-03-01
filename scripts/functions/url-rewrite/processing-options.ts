@@ -9,6 +9,7 @@ export type ImgproxyBaseOption = {
 	short: string;
 	alt?: string;
 	pro?: boolean;
+	pkl?: "full" | "short" | "alt";
 };
 export type ImgproxyMetaOption = ImgproxyBaseOption & {
 	meta: boolean;

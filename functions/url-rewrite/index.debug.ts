@@ -20,7 +20,7 @@ import type {
  * L O G G I N G  S E T U P
  */
 
-let LOG_LEVEL = resolveLogLevel("error");
+let LOG_LEVEL = 0;
 
 const defaultConfig: UrlRewrite.Config = {
 	imgproxy_salt: "",
@@ -36,127 +36,145 @@ const defaultConfig: UrlRewrite.Config = {
  */
 
 const kvsHandle = cf.kvs();
-const imgproxyProcessingOptions: ImgproxyOption[] = [
-	{
+const indexedOptions: Record<string, ImgproxyOption> = {
+	resize: {
 		full: "resize",
 		short: "rs",
 		meta: true,
 		metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"],
 	},
-	{
+	rs: {
+		full: "resize",
+		short: "rs",
+		meta: true,
+		metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"],
+	},
+	size: {
 		full: "size",
 		short: "s",
 		meta: true,
 		metaOptions: ["width", "height", "enlarge", "extend"],
 	},
-	{
-		full: "resizing_type",
-		short: "rt",
-	},
-	{ full: "resizing_algorithm", short: "ra", pro: true },
-	{ full: "width", short: "w" },
-	{ full: "height", short: "h" },
-	{ full: "min_width", short: "mw" },
-	{ full: "min_height", short: "mh" },
-	{ full: "zoom", short: "z" },
-	{ full: "dpr", short: "dpr" },
-	{ full: "enlarge", short: "el" },
-	{ full: "extend", short: "ex" },
-	{ full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
-	{ full: "gravity", short: "g" },
-	{ full: "objcts_position", short: "op", alt: "obj_pos", pro: true },
-	{ full: "crop", short: "c" },
-	{ full: "trim", short: "t" },
-	{ full: "padding", short: "pd" },
-	{ full: "auto_rotate", short: "ar" },
-	{ full: "rotate", short: "rot" },
-	{ full: "background", short: "bg" },
-	{ full: "background_alpha", short: "bga", pro: true },
-	{
-		full: "adjust",
-		short: "a",
-		pro: true,
+	s: {
+		full: "size",
+		short: "s",
 		meta: true,
-		metaOptions: ["brightness", "contrast", "saturation"],
+		metaOptions: ["width", "height", "enlarge", "extend"],
 	},
-	{ full: "brightness", short: "br", pro: true },
-	{ full: "contrast", short: "co", pro: true },
-	{ full: "saturation", short: "sa", pro: true },
-	{ full: "monochrome", short: "mc", pro: true },
-	{ full: "duotone", short: "dt", pro: true },
-	{ full: "blur", short: "bl" },
-	{ full: "sharpen", short: "sh" },
-	{ full: "pixelate", short: "pix" },
-	{ full: "unsharp_masking", short: "ush", pro: true },
-	{ full: "blur_detections", short: "bd", pro: true },
-	{ full: "draw_detections", short: "dd", pro: true },
-	{ full: "colorize", short: "col", pro: true },
-	{ full: "gradient", short: "gr", pro: true },
-	{ full: "watermark", short: "wm" },
-	{ full: "watermark_url", short: "wmu", pro: true },
-	{ full: "watermark_text", short: "wmt", pro: true },
-	{ full: "watermark_size", short: "wms", pro: true },
-	{ full: "watermark_rotate", short: "wmr", alt: "wm_rot", pro: true },
-	{ full: "watermark_shadow", short: "wmsh", pro: true },
-	{ full: "style", short: "st", pro: true },
-	{ full: "strip_metadata", short: "sm" },
-	{ full: "keep_copyright", short: "kcr" },
-	{ full: "dpi", short: "dpi", pro: true },
-	{ full: "strip_color_profile", short: "scp" },
-	{ full: "enforce_thumbnail", short: "eth" },
-	{ full: "quality", short: "q" },
-	{ full: "format_quality", short: "fq" },
-	{ full: "autoquality", short: "aq", pro: true },
-	{ full: "max_bytes", short: "mb" },
-	{ full: "jpeg_options", short: "jpgo", pro: true },
-	{ full: "png_options", short: "pngo", pro: true },
-	{ full: "webp_options", short: "webpo", pro: true },
-	{ full: "format", short: "f", alt: "ext" },
-	{ full: "page", short: "pg", pro: true },
-	{ full: "pages", short: "pgs", pro: true },
-	{ full: "disable_animation", short: "da", pro: true },
-	{ full: "video_thumbnail_second", short: "vts", pro: true },
-	{ full: "video_thumbnail_keyframes", short: "vtk", pro: true },
-	{ full: "video_thumbnail_tile", short: "vtt", pro: true },
-	{ full: "video_thumbnail_animation", short: "vta", pro: true },
-	{ full: "fallback_image_url", short: "fiu", pro: true },
-	{ full: "skip_processing", short: "skp" },
-	{ full: "raw", short: "raw" },
-	{ full: "cache_buster", short: "cb" },
-	{ full: "expires", short: "exp" },
-	{ full: "filename", short: "fn" },
-	{ full: "return_attachment", short: "att" },
-	{ full: "preset", short: "pr" },
-	{ full: "hashsum", short: "hs", pro: true },
-	{ full: "max_src_resolution", short: "msr" },
-	{ full: "max_src_file_size", short: "msfs" },
-	{ full: "max_animation_frames", short: "maf" },
-	{ full: "max_animation_frame_resolution", short: "mafr" },
-];
+	resizing_type: { full: "resizing_type", short: "rt" },
+	rt: { full: "resizing_type", short: "rt" },
+	width: { full: "width", short: "w" },
+	w: { full: "width", short: "w" },
+	height: { full: "height", short: "h" },
+	h: { full: "height", short: "h" },
+	min_width: { full: "min_width", short: "mw" },
+	mw: { full: "min_width", short: "mw" },
+	min_height: { full: "min_height", short: "mh" },
+	mh: { full: "min_height", short: "mh" },
+	zoom: { full: "zoom", short: "z" },
+	z: { full: "zoom", short: "z" },
+	dpr: { full: "dpr", short: "dpr" },
+	enlarge: { full: "enlarge", short: "el" },
+	el: { full: "enlarge", short: "el" },
+	extend: { full: "extend", short: "ex" },
+	ex: { full: "extend", short: "ex" },
+	extend_aspect_ratio: {
+		full: "extend_aspect_ratio",
+		short: "exar",
+		alt: "extend_ar",
+	},
+	exar: {
+		full: "extend_aspect_ratio",
+		short: "exar",
+		alt: "extend_ar",
+	},
+	extend_ar: {
+		full: "extend_aspect_ratio",
+		short: "exar",
+		alt: "extend_ar",
+	},
+	gravity: { full: "gravity", short: "g" },
+	g: { full: "gravity", short: "g" },
+	crop: { full: "crop", short: "c" },
+	c: { full: "crop", short: "c" },
+	trim: { full: "trim", short: "t" },
+	t: { full: "trim", short: "t" },
+	padding: { full: "padding", short: "pd" },
+	pd: { full: "padding", short: "pd" },
+	auto_rotate: { full: "auto_rotate", short: "ar" },
+	ar: { full: "auto_rotate", short: "ar" },
+	rotate: { full: "rotate", short: "rot" },
+	rot: { full: "rotate", short: "rot" },
+	background: { full: "background", short: "bg" },
+	bg: { full: "background", short: "bg" },
+	blur: { full: "blur", short: "bl" },
+	bl: { full: "blur", short: "bl" },
+	sharpen: { full: "sharpen", short: "sh" },
+	sh: { full: "sharpen", short: "sh" },
+	pixelate: { full: "pixelate", short: "pix" },
+	pix: { full: "pixelate", short: "pix" },
+	watermark: { full: "watermark", short: "wm" },
+	wm: { full: "watermark", short: "wm" },
+	strip_metadata: { full: "strip_metadata", short: "sm" },
+	sm: { full: "strip_metadata", short: "sm" },
+	keep_copyright: { full: "keep_copyright", short: "kcr" },
+	kcr: { full: "keep_copyright", short: "kcr" },
+	strip_color_profile: { full: "strip_color_profile", short: "scp" },
+	scp: { full: "strip_color_profile", short: "scp" },
+	enforce_thumbnail: { full: "enforce_thumbnail", short: "eth" },
+	eth: { full: "enforce_thumbnail", short: "eth" },
+	quality: { full: "quality", short: "q" },
+	q: { full: "quality", short: "q" },
+	format_quality: { full: "format_quality", short: "fq" },
+	fq: { full: "format_quality", short: "fq" },
+	max_bytes: { full: "max_bytes", short: "mb" },
+	mb: { full: "max_bytes", short: "mb" },
+	format: { full: "format", short: "f", alt: "ext" },
+	f: { full: "format", short: "f", alt: "ext" },
+	ext: { full: "format", short: "f", alt: "ext" },
+	skip_processing: { full: "skip_processing", short: "skp" },
+	skp: { full: "skip_processing", short: "skp" },
+	raw: { full: "raw", short: "raw" },
+	cache_buster: { full: "cache_buster", short: "cb" },
+	cb: { full: "cache_buster", short: "cb" },
+	expires: { full: "expires", short: "exp" },
+	exp: { full: "expires", short: "exp" },
+	filename: { full: "filename", short: "fn" },
+	fn: { full: "filename", short: "fn" },
+	return_attachment: { full: "return_attachment", short: "att" },
+	att: { full: "return_attachment", short: "att" },
+	preset: { full: "preset", short: "pr" },
+	pr: { full: "preset", short: "pr" },
+	max_src_resolution: { full: "max_src_resolution", short: "msr" },
+	msr: { full: "max_src_resolution", short: "msr" },
+	max_src_file_size: { full: "max_src_file_size", short: "msfs" },
+	msfs: { full: "max_src_file_size", short: "msfs" },
+	max_animation_frames: { full: "max_animation_frames", short: "maf" },
+	maf: { full: "max_animation_frames", short: "maf" },
+	max_animation_frame_resolution: {
+		full: "max_animation_frame_resolution",
+		short: "mafr",
+	},
+	mafr: { full: "max_animation_frame_resolution", short: "mafr" },
+};
 
-function _matchOption(val: string) {
-	return (option: ImgproxyOption) =>
-		option.full === val || option.short === val || option.alt === val;
-}
-function findOption(val: string) {
-	return imgproxyProcessingOptions.find(_matchOption(val));
-}
-function findOptionIndex(val: string) {
-	return imgproxyProcessingOptions.findIndex(_matchOption(val));
-}
+const keyOrder = Object.keys(indexedOptions).reduce((r, k, i) => {
+	r[k] = i;
+	return r;
+}, {});
 
-function optionOrder(a, b) {
-	return findOptionIndex(a[0]) - findOptionIndex(b[0]);
+function optionOrder(a: string[], b: string[]) {
+	return keyOrder[a[0]] - keyOrder[b[0]];
 }
 
 /**
  * H A N D L E R
  */
 
-async function handler(event: AWSCloudFrontFunction.Event) {
+export async function handler(event: AWSCloudFrontFunction.Event) {
 	debugLog(`In handler with event: ${JSON.stringify(event)}`, "debug");
 
-	const kvsResponse = await kvsGet("config", kvsHandle, "json");
+	const kvsResponse = await kvsGet("signature_config", kvsHandle, "json");
 
 	if (kvsResponse.none !== undefined) {
 		return sendError(403, "Forbidden", "", kvsResponse.none);
@@ -243,11 +261,12 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 	}
 
 	const optionStrings = _trimSeparators(processingOptionsString).split("/");
-	const normalizedOptionMap: Record<string, [number, string]> = {};
+	const optionPartitions: Array<Record<string, string>> = [];
+	let optionPartition = Object.create(null);
 	debugLog("mapping processing options", "info");
-	let optOrder = 0;
 	for (let i = 0; i < optionStrings.length; i++) {
 		const optionArr = optionStrings[i].split(IMGPROXY_ARGUMENTS_SEPARATOR);
+
 		debugLog(
 			`parsed option: ${JSON.stringify({
 				index: i,
@@ -255,13 +274,16 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 			})}`,
 			"debug",
 		);
+
 		const option = optionArr.shift();
 		const args = optionArr;
 		if (option !== undefined && args.length > 0) {
-			const optionMap = findOption(option);
+			const optionMap = indexedOptions[option];
+
 			if (optionMap !== undefined) {
 				if ((<ImgproxyMetaOption>optionMap).meta !== undefined) {
 					const metaOptions = (<ImgproxyMetaOption>optionMap).metaOptions;
+
 					for (let metaOptionIndex = 0; metaOptionIndex < metaOptions.length; metaOptionIndex++) {
 						const metaOption = metaOptions[metaOptionIndex];
 						if (args[metaOptionIndex] !== undefined) {
@@ -269,16 +291,16 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 								metaOptionIndex === metaOptions.length - 1
 									? args.slice(metaOptionIndex)
 									: [args[metaOptionIndex]];
-							const metaOptionMap = findOption(metaOption);
+							const metaOptionMap = indexedOptions[metaOption];
 							if (metaOptionMap !== undefined) {
 								const preferredKey = metaOptionMap.short ?? metaOption;
-								delete normalizedOptionMap[preferredKey];
-								normalizedOptionMap[preferredKey] = [
-									optOrder++,
-									individualOptionArgs.join(IMGPROXY_ARGUMENTS_SEPARATOR),
-								];
+								delete optionPartition[preferredKey];
+								optionPartition[preferredKey] = individualOptionArgs.join(
+									IMGPROXY_ARGUMENTS_SEPARATOR,
+								);
+
 								debugLog(
-									`mapped meta option: og:${metaOption}:pk:${preferredKey}:args:${normalizedOptionMap[preferredKey]}`,
+									`mapped meta option: og:${metaOption}:pk:${preferredKey}:args:${optionPartition[preferredKey]}`,
 									"debug",
 								);
 							}
@@ -286,11 +308,18 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 					}
 				} else {
 					const preferredKey = optionMap.short ?? option;
-					delete normalizedOptionMap[preferredKey];
-					normalizedOptionMap[preferredKey] = [optOrder++, args.join(IMGPROXY_ARGUMENTS_SEPARATOR)];
+					const argString = args.join(IMGPROXY_ARGUMENTS_SEPARATOR);
+
+					if (optionMap.full === "preset") {
+						optionPartitions.push(optionPartition, { [preferredKey]: argString });
+						optionPartition = Object.create(null);
+					} else {
+						delete optionPartition[preferredKey];
+						optionPartition[preferredKey] = argString;
+					}
 
 					debugLog(
-						`mapped option: og:${option}:pk:${preferredKey}:args:${normalizedOptionMap[preferredKey]}`,
+						`mapped option: og:${option}:pk:${preferredKey}:args:${optionPartition[preferredKey]}`,
 						"debug",
 					);
 				}
@@ -298,45 +327,31 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 		}
 	}
 
-	debugLog(`option_partitions: ${JSON.stringify(normalizedOptionMap)}`, "debug");
-
 	debugLog("normalizing options map", "info");
-	const optionEntries = Object.entries(normalizedOptionMap).sort((a, b) => a[1][0] - b[1][0]);
-	debugLog(`option_entries: ${JSON.stringify(optionEntries)}`, "debug");
-
-	const presetIndex = optionEntries.findIndex(
-		(entry) => entry[0] === "preset" || entry[0] === "pr",
-	);
-
-	const optionPartitions: [string, [number, string]][][] = [];
-	if (presetIndex >= 0) {
-		const part1 = optionEntries.slice(0, presetIndex);
-		const part2 = optionEntries.slice(presetIndex, presetIndex + 1);
-		const part3 = optionEntries.slice(presetIndex + 1);
-		optionPartitions.push(part1, part2, part3);
-	}
 
 	debugLog(`option_partitions: ${JSON.stringify(optionPartitions)}`, "debug");
-
 	const normalizedOptionsString = optionPartitions
 		.reduce(
-			(result, partition) =>
-				result.concat(
-					partition
+			(r, e) =>
+				r.concat(
+					Object.entries(e)
 						.sort(optionOrder)
-						.map((entry) => [entry[0], entry[1][1]].join(IMGPROXY_ARGUMENTS_SEPARATOR)),
+						.map((entry) => entry.join(IMGPROXY_ARGUMENTS_SEPARATOR)),
 				),
 			<string[]>[],
 		)
 		.join("/");
-	debugLog("options map normalized", "info");
-	debugLog(`normalized_option_string: ${normalizedOptionsString}`, "debug");
+
+	debugLog(normalizedOptionsString);
+
 	const newImgproxyPath = `/${normalizedOptionsString}/${sourceUrlType}${sourceUrl}`;
 	const resultUri = `/${_sign(IMGPROXY_SALT, newImgproxyPath, IMGPROXY_KEY, IMGPROXY_SIGNATURE_SIZE)}${newImgproxyPath}`;
 	request.uri = resultUri;
+
 	if (debugRequest) {
 		setDebugInfo(request, requestUri, resultUri, signingEnabled);
 	}
+
 	return request;
 }
 
@@ -427,7 +442,7 @@ const LOG_PREFIX: Partial<Record<UrlRewrite.LogLevel, string>> = {
 };
 
 // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-function debugLog(logline: any, level: UrlRewrite.LogLevel) {
+function debugLog(logline: any, level: UrlRewrite.LogLevel = "none") {
 	const prefix = `${LOG_PREFIX[level] ? `${LOG_PREFIX[level]} ` : ""}`;
 	if (resolveLogLevel(level) <= LOG_LEVEL) {
 		console.log(`${prefix}${logline}`);
