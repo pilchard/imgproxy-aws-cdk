@@ -158,7 +158,7 @@ const indexedOptions: Record<string, ImgproxyOption> = {
 	},
 	mafr: { full: "max_animation_frame_resolution", short: "mafr" },
 };
-const optionOrderArr = [
+const optionPriority = [
 	"rs",
 	"s",
 	"rt",
@@ -203,8 +203,8 @@ const optionOrderArr = [
 	"mafr",
 ];
 
-function optionOrder(a, b) {
-	return optionOrderArr.indexOf(a[0]) - optionOrderArr.indexOf(b[0]);
+function optionPriorityOrder(a: string[], b: string[]) {
+	return optionPriority.indexOf(a[0]) - optionPriority.indexOf(b[0]);
 }
 
 /**
@@ -301,9 +301,10 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 	}
 
 	const optionStrings = _trimSeparators(processingOptionsString).split("/");
-	const normalizedOptionMap: Record<string, [number, string]> = {};
+	const normalizedOptionMap: Record<string, [number, [string, string]]> = {};
+	let mapOrder = 0;
+	let presetCount = 0;
 	debugLog("mapping processing options", "info");
-	let optOrder = 0;
 	for (let i = 0; i < optionStrings.length; i++) {
 		const optionArr = optionStrings[i].split(IMGPROXY_ARGUMENTS_SEPARATOR);
 		debugLog(
@@ -332,8 +333,8 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 								const preferredKey = metaOptionMap.short ?? metaOption;
 								delete normalizedOptionMap[preferredKey];
 								normalizedOptionMap[preferredKey] = [
-									optOrder++,
-									individualOptionArgs.join(IMGPROXY_ARGUMENTS_SEPARATOR),
+									mapOrder++,
+									[preferredKey, individualOptionArgs.join(IMGPROXY_ARGUMENTS_SEPARATOR)],
 								];
 								debugLog(
 									`mapped meta option: og:${metaOption}:pk:${preferredKey}:args:${normalizedOptionMap[preferredKey]}`,
@@ -344,8 +345,19 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 					}
 				} else {
 					const preferredKey = optionMap.short ?? option;
-					delete normalizedOptionMap[preferredKey];
-					normalizedOptionMap[preferredKey] = [optOrder++, args.join(IMGPROXY_ARGUMENTS_SEPARATOR)];
+					// handle multiple presets
+					if (preferredKey === "pr") {
+						normalizedOptionMap[`${preferredKey}${presetCount++}`] = [
+							mapOrder++,
+							[preferredKey, args.join(IMGPROXY_ARGUMENTS_SEPARATOR)],
+						];
+					} else {
+						delete normalizedOptionMap[preferredKey];
+						normalizedOptionMap[preferredKey] = [
+							mapOrder++,
+							[preferredKey, args.join(IMGPROXY_ARGUMENTS_SEPARATOR)],
+						];
+					}
 
 					debugLog(
 						`mapped option: og:${option}:pk:${preferredKey}:args:${normalizedOptionMap[preferredKey]}`,
@@ -357,41 +369,50 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 	}
 
 	debugLog(`option_partitions: ${JSON.stringify(normalizedOptionMap)}`, "debug");
-
 	debugLog("normalizing options map", "info");
-	const optionEntries = Object.entries(normalizedOptionMap).sort((a, b) => a[1][0] - b[1][0]);
+
+	const optionEntries = Object.values(normalizedOptionMap)
+		.sort((a, b) => a[0] - b[0])
+		.map((v) => v[1]);
+
 	debugLog(`option_entries: ${JSON.stringify(optionEntries)}`, "debug");
 
-	const presetIndex = optionEntries.findIndex(
-		(entry) => entry[0] === "preset" || entry[0] === "pr",
+	const optionPartitions = optionEntries.reduce(
+		(result, entry) => {
+			if (entry[0] === "preset" || entry[0] === "pr") {
+				result[result.length] = [entry];
+				result[result.length] = [];
+			} else {
+				result[result.length - 1].push(entry);
+			}
+			return result;
+		},
+		[[]] as [string, string][][],
 	);
-
-	const optionPartitions: [string, [number, string]][][] = [];
-	if (presetIndex >= 0) {
-		const part1 = optionEntries.slice(0, presetIndex);
-		const part2 = optionEntries.slice(presetIndex, presetIndex + 1);
-		const part3 = optionEntries.slice(presetIndex + 1);
-		optionPartitions.push(part1, part2, part3);
-	}
 
 	debugLog(`option_partitions: ${JSON.stringify(optionPartitions)}`, "debug");
 
 	const normalizedOptionsString = optionPartitions
-		.reduce(
-			(result, partition) =>
-				result.concat(
+		.reduce((result, partition) => {
+			if (partition.length) {
+				result.push(
 					partition
-						.sort(optionOrder)
-						.map((entry) => [entry[0], entry[1][1]].join(IMGPROXY_ARGUMENTS_SEPARATOR)),
-				),
-			<string[]>[],
-		)
+						.sort(optionPriorityOrder)
+						.map((entry) => entry.join(IMGPROXY_ARGUMENTS_SEPARATOR))
+						.join("/"),
+				);
+			}
+			return result;
+		}, [] as string[])
 		.join("/");
+
 	debugLog("options map normalized", "info");
 	debugLog(`normalized_option_string: ${normalizedOptionsString}`, "debug");
+
 	const newImgproxyPath = `/${normalizedOptionsString}/${sourceUrlType}${sourceUrl}`;
 	const resultUri = `/${_sign(IMGPROXY_SALT, newImgproxyPath, IMGPROXY_KEY, IMGPROXY_SIGNATURE_SIZE)}${newImgproxyPath}`;
 	request.uri = resultUri;
+
 	if (debugRequest) {
 		setDebugInfo(request, requestUri, resultUri, signingEnabled);
 	}
