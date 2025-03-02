@@ -7,44 +7,23 @@
  * [x] handle multiple `preset` options
  */
 
-("use strict");
+// @ts-ignore: CloudFront Function runtime import
+// biome-ignore lint/style/useNodejsImportProtocol:
 import crypto from "crypto";
+// @ts-ignore: CloudFront Function runtime import
 import cf from "cloudfront";
 
-import type {
-	ImgproxyMetaOption,
-	ImgproxyOption,
-} from "../../scripts/functions/url-rewrite/processing-options";
+import type { ImgproxyMetaOption, ImgproxyOption } from "../../scripts/functions/url-rewrite/processing-options";
 
 /**
  * D A T A
  */
 
 const indexedOptions: Record<string, ImgproxyOption> = {
-	resize: {
-		full: "resize",
-		short: "rs",
-		meta: true,
-		metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"],
-	},
-	rs: {
-		full: "resize",
-		short: "rs",
-		meta: true,
-		metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"],
-	},
-	size: {
-		full: "size",
-		short: "s",
-		meta: true,
-		metaOptions: ["width", "height", "enlarge", "extend"],
-	},
-	s: {
-		full: "size",
-		short: "s",
-		meta: true,
-		metaOptions: ["width", "height", "enlarge", "extend"],
-	},
+	resize: { full: "resize", short: "rs", meta: true, metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"] },
+	rs: { full: "resize", short: "rs", meta: true, metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"] },
+	size: { full: "size", short: "s", meta: true, metaOptions: ["width", "height", "enlarge", "extend"] },
+	s: { full: "size", short: "s", meta: true, metaOptions: ["width", "height", "enlarge", "extend"] },
 	resizing_type: { full: "resizing_type", short: "rt" },
 	rt: { full: "resizing_type", short: "rt" },
 	width: { full: "width", short: "w" },
@@ -62,21 +41,9 @@ const indexedOptions: Record<string, ImgproxyOption> = {
 	el: { full: "enlarge", short: "el" },
 	extend: { full: "extend", short: "ex" },
 	ex: { full: "extend", short: "ex" },
-	extend_aspect_ratio: {
-		full: "extend_aspect_ratio",
-		short: "exar",
-		alt: "extend_ar",
-	},
-	exar: {
-		full: "extend_aspect_ratio",
-		short: "exar",
-		alt: "extend_ar",
-	},
-	extend_ar: {
-		full: "extend_aspect_ratio",
-		short: "exar",
-		alt: "extend_ar",
-	},
+	extend_aspect_ratio: { full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
+	exar: { full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
+	extend_ar: { full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
 	gravity: { full: "gravity", short: "g" },
 	g: { full: "gravity", short: "g" },
 	crop: { full: "crop", short: "c" },
@@ -135,12 +102,10 @@ const indexedOptions: Record<string, ImgproxyOption> = {
 	msfs: { full: "max_src_file_size", short: "msfs" },
 	max_animation_frames: { full: "max_animation_frames", short: "maf" },
 	maf: { full: "max_animation_frames", short: "maf" },
-	max_animation_frame_resolution: {
-		full: "max_animation_frame_resolution",
-		short: "mafr",
-	},
+	max_animation_frame_resolution: { full: "max_animation_frame_resolution", short: "mafr" },
 	mafr: { full: "max_animation_frame_resolution", short: "mafr" },
 };
+
 const optionPriority = [
 	"rs",
 	"s",
@@ -185,10 +150,12 @@ const optionPriority = [
 	"maf",
 	"mafr",
 ];
+
 function optionPriorityOrder(a: string[], b: string[]) {
 	return optionPriority.indexOf(a[0]) - optionPriority.indexOf(b[0]);
 }
-const logLevelMap: Record<UrlRewrite.LogLevel, { prefix: string; index: number }> = {
+
+const logLevelMap: Record<UrlRewrite.LogLevel, { prefix: string; index: number; }> = {
 	none: { prefix: "", index: 0 },
 	error: { prefix: "[ERROR]", index: 1 },
 	warn: { prefix: "[WARN]", index: 2 },
@@ -200,7 +167,6 @@ const logLevelMap: Record<UrlRewrite.LogLevel, { prefix: string; index: number }
  * G L O B A L S
  */
 
-let LOG_LEVEL = resolveLogLevel("none");
 const kvsHandle = cf.kvs();
 const defaultConfig: UrlRewrite.Config = {
 	imgproxy_salt: "",
@@ -210,6 +176,8 @@ const defaultConfig: UrlRewrite.Config = {
 	imgproxy_arguments_separator: ":",
 	log_level: "none",
 };
+
+let LOG_LEVEL = resolveLogLevel("none");
 
 /**
  * H A N D L E R
@@ -330,27 +298,19 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 							const metaOptionMap = indexedOptions[metaOption];
 							if (metaOptionMap !== undefined) {
 								const preferredKey = metaOptionMap.short ?? metaOption;
-								normalizedOptionMap[preferredKey] = [
-									mapOrder++,
-									[
-										preferredKey,
-										preferredKey +
-											IMGPROXY_ARGUMENTS_SEPARATOR +
-											individualOptionArgs.join(IMGPROXY_ARGUMENTS_SEPARATOR),
-									],
-								];
+								normalizedOptionMap[preferredKey] = [mapOrder++, [
+									preferredKey,
+									preferredKey + IMGPROXY_ARGUMENTS_SEPARATOR + individualOptionArgs.join(IMGPROXY_ARGUMENTS_SEPARATOR),
+								]];
 							}
 						}
 					}
 				} else {
 					const preferredKey = optionMap.short ?? option;
-					normalizedOptionMap[`${preferredKey}${preferredKey === "pr" ? presetCount++ : ""}`] = [
-						mapOrder++,
-						[
-							preferredKey,
-							preferredKey + IMGPROXY_ARGUMENTS_SEPARATOR + args.join(IMGPROXY_ARGUMENTS_SEPARATOR),
-						],
-					];
+					normalizedOptionMap[`${preferredKey}${preferredKey === "pr" ? presetCount++ : ""}`] = [mapOrder++, [
+						preferredKey,
+						preferredKey + IMGPROXY_ARGUMENTS_SEPARATOR + args.join(IMGPROXY_ARGUMENTS_SEPARATOR),
+					]];
 				}
 			}
 		}
@@ -358,9 +318,7 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 	// logLine(`option_partitions: ${JSON.stringify(normalizedOptionMap)}`, "debug");
 
 	logLine("normalizing options map", "info");
-	const optionEntries = Object.values(normalizedOptionMap)
-		.sort((a, b) => a[0] - b[0])
-		.map((v) => v[1]);
+	const optionEntries = Object.values(normalizedOptionMap).sort((a, b) => a[0] - b[0]).map((v) => v[1]);
 
 	// logLine(`option_entries: ${JSON.stringify(optionEntries)}`, "debug");
 
@@ -378,12 +336,7 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 	}
 	// handle trailing partition
 	if (temp.length) {
-		partitionedStrings.push(
-			temp
-				.sort(optionPriorityOrder)
-				.map((e) => e[1])
-				.join("/"),
-		);
+		partitionedStrings.push(temp.sort(optionPriorityOrder).map((e) => e[1]).join("/"));
 	}
 
 	const normalizedOptionsString = partitionedStrings.join("/");
@@ -414,9 +367,7 @@ async function kvsGet<K extends keyof KeyValueStore.ValueFormat>(
 	format: K,
 ): Promise<Option<KeyValueStore.ValueFormat[K], Error>> {
 	try {
-		return {
-			some: await handle.get(`${key}`, { format: format }),
-		};
+		return { some: await handle.get(`${key}`, { format: format }) };
 	} catch (err) {
 		return { none: new Error("Failed to retrieve value from key value store") };
 	}
@@ -434,13 +385,7 @@ function trimSeparators(str: string) {
  * S I G N I N G
  */
 
-function validateSignature(
-	signature: string,
-	salt: string,
-	target: string,
-	key: string,
-	size: number,
-) {
+function validateSignature(signature: string, salt: string, target: string, key: string, size: number) {
 	if (!_stringTimingSafeEqual(signature, _sign(salt, target, key, size))) {
 		throw new Error("Signature verification failed");
 	}
@@ -474,6 +419,7 @@ function _hexDecode(hex: string) {
  */
 
 function resolveLogLevel(level: UrlRewrite.LogLevel): number {
+	// biome-ignore lint/complexity/useOptionalChain: <explanation>
 	return (logLevelMap[level] ?? {}).index ?? Number.POSITIVE_INFINITY;
 }
 
@@ -521,28 +467,13 @@ function sendError(statusCode: number, statusText: string, body: string, error: 
  * T Y P E S
  */
 
-type Option<T, E> =
-	| {
-			some: T;
-			none?: undefined;
-	  }
-	| {
-			some?: undefined;
-			none: E;
-	  };
+type Option<T, E> = { some: T; none?: undefined; } | { some?: undefined; none: E; };
 
 namespace KeyValueStore {
-	export type ValueFormat = {
-		string: string;
-		json: Record<string, unknown>;
-		bytes: Buffer;
-	};
+	export type ValueFormat = { string: string; json: Record<string, unknown>; bytes: Buffer; };
 
 	export type Handle = {
-		get: <K extends keyof ValueFormat>(
-			key: string,
-			options: { format: K },
-		) => Promise<ValueFormat[K]> | never;
+		get: <K extends keyof ValueFormat>(key: string, options: { format: K; }) => Promise<ValueFormat[K]> | never;
 		exists: (key: string) => Promise<boolean>;
 		meta: () => Promise<MetaDataResponse>;
 	};
