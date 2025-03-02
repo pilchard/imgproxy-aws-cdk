@@ -7,10 +7,9 @@
 // @ts-ignore: CloudFront Function runtime import
 // biome-ignore lint/style/useNodejsImportProtocol:
 import crypto from "crypto";
-// @ts-ignore: CloudFront Function runtime import
+
 import cf from "cloudfront";
 
-import type { AWSKeyValueStore } from "./aws-keyvaluestore.d.ts";
 import type { ImgproxyMetaOption, ImgproxyOption } from "./processing-options";
 import type { UrlRewrite } from "./url-rewrite.d.ts";
 import type { Option } from "./utility.d.ts";
@@ -361,11 +360,11 @@ async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCloudFron
  * K E Y  V A L U E  S T O R E
  */
 
-async function kvsGet<K extends keyof AWSKeyValueStore.ValueFormat>(
+async function kvsGet<K extends keyof AWSCloudFront.ValueFormat>(
 	key: string,
-	handle: AWSKeyValueStore.Handle,
+	handle: AWSCloudFront.Handle,
 	format: K,
-): Promise<Option<AWSKeyValueStore.ValueFormat[K], Error>> {
+): Promise<Option<AWSCloudFront.ValueFormat[K], Error>> {
 	try {
 		return { some: await handle.get(`${key}`, { format: format }) };
 	} catch (err) {

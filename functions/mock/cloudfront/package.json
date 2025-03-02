@@ -1,0 +1,13 @@
+{
+	"name": "cloudfront",
+	"version": "1.0.0",
+	"description": "Mock cloudfront for local dev",
+	"license": "ISC",
+	"author": "",
+	"type": "module",
+	"main": "index.js",
+	"module": "index.ts",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	}
+}

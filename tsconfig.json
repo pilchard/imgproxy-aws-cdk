@@ -29,4 +29,9 @@
   "exclude": [
     "functions/**/*"
   ],
+  "paths": {
+    "cloudfront": [
+      "./functions/mock/cloudfront.ts"
+    ]
+  }
 }

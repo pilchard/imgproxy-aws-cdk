@@ -2,6 +2,9 @@
 	"name": "imgproxy-aws-cdk",
 	"version": "0.1.0",
 	"type": "module",
+	"source": "functions/url-rewrite/index.ts",
+	"main": ".dist/functions/url-rewrite/index.js",
+	"module": ".dist/functions/url-rewrite/index.module.js",
 	"bin": {
 		"imgproxy": "./bin/imgproxy.js"
 	},
@@ -10,7 +13,8 @@
 		"watch": "tsc -w",
 		"test": "jest",
 		"cdk": "cdk",
-		"proc-opt": "rm -rf ./functions/url-rewrite/indexed-processing-options.js && tsx ./scripts/functions/url-rewrite/processing-options.ts"
+		"proc-opt": "rm -rf ./functions/url-rewrite/indexed-processing-options.js && tsx ./scripts/functions/url-rewrite/processing-options.ts",
+		"parcel": "parcel build"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
@@ -23,11 +27,13 @@
 		"aws-cdk": "2.1001.0",
 		"esbuild": "^0.25.0",
 		"jest": "^29.7.0",
+		"parcel": "^2.13.3",
 		"prompts": "^2.4.2",
 		"ts-jest": "^29.2.6",
 		"ts-node": "^10.9.2",
 		"tsx": "^4.19.3",
-		"typescript": "~5.7.3"
+		"typescript": "~5.7.3",
+		"cloudfront": "link:functions/mock/cloudfront"
 	},
 	"dependencies": {
 		"aws-cdk-lib": "2.181.0",
@@ -36,5 +42,6 @@
 		"execa": "^9.5.2",
 		"source-map-support": "^0.5.21"
 	},
+
 	"packageManager": "pnpm@9.15.4+sha512.b2dc20e2fc72b3e18848459b37359a32064663e5627a51e4c74b2c29dd8e8e0491483c3abb40789cfd578bf362fb6ba8261b05f0387d76792ed6e23ea3b1b6a0"
 }

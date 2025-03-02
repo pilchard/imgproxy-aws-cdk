@@ -8,7 +8,7 @@
 		"useTabs": true,
 		"semiColons": "always",
 		"quoteStyle": "alwaysDouble",
-		"quoteProps": "preserve",
+		"quoteProps": "asNeeded",
 		"newLineKind": "lf",
 		"useBraces": "whenNotSingleLine",
 		"bracePosition": "sameLineUnlessHanging",
