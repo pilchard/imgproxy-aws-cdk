@@ -265,19 +265,21 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 	const uriRegexpResult = imgproxyUriRegexp.exec(requestUri);
 
 	if (uriRegexpResult === null) {
-		const res = sendError(403, "Forbidden", "", new Error("Unable to parse URI"));
-		if (debugRequest) {
-			setDebugInfo(res, requestUri, undefined, signingEnabled);
-		}
-		return res;
+		// const res = sendError(403, "Forbidden", "", new Error("Unable to parse URI"));
+		// if (debugRequest) {
+		// 	setDebugInfo(res, requestUri, undefined, signingEnabled);
+		// }
+		// return res;
+		return sendError(403, "Forbidden", "", new Error("Unable to parse URI"));
 	}
 
 	if (uriRegexpResult[1] === undefined) {
-		const res = sendError(403, "Forbidden", "", new Error("Signature is missing from URI"));
-		if (debugRequest) {
-			setDebugInfo(res, requestUri, undefined, signingEnabled);
-		}
-		return res;
+		// const res = sendError(403, "Forbidden", "", new Error("Signature is missing from URI"));
+		// if (debugRequest) {
+		// 	setDebugInfo(res, requestUri, undefined, signingEnabled);
+		// }
+		// return res;
+		return sendError(403, "Forbidden", "", new Error("Unable to parse URI"));
 	}
 
 	logLine("uri parsing successful", "info");
@@ -298,11 +300,12 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 				IMGPROXY_SIGNATURE_SIZE,
 			);
 		} catch (err) {
+			// const res = sendError(403, "Forbidden", "", new Error("Signature is missing from URI"));
+			// if (debugRequest) {
+			// 	setDebugInfo(res, requestUri, undefined, signingEnabled);
+			// }
+			// return res;
 			const res = sendError(403, "Forbidden", "", new Error("Signature verification failed"));
-			if (debugRequest) {
-				setDebugInfo(res, requestUri, undefined, signingEnabled);
-			}
-			return res;
 		}
 	}
 

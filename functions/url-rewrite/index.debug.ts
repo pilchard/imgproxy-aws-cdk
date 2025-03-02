@@ -4,7 +4,7 @@
  * [x] use JSON kvs value for configuration
  * [ ] inline extraneous functions
  * [ ] test/streamline code for aws-js2.0
- * [ ] handle multiple `preset` options
+ * [x] handle multiple `preset` options
  */
 
 ("use strict");
@@ -200,7 +200,7 @@ const logLevelMap: Record<UrlRewrite.LogLevel, { prefix: string; index: number }
  * G L O B A L S
  */
 
-let LOG_LEVEL = resolveLogLevel("error");
+let LOG_LEVEL = resolveLogLevel("none");
 const kvsHandle = cf.kvs();
 const defaultConfig: UrlRewrite.Config = {
 	imgproxy_salt: "",
@@ -216,7 +216,7 @@ const defaultConfig: UrlRewrite.Config = {
  */
 
 async function handler(event: AWSCloudFrontFunction.Event) {
-	logLine(`In handler with event: ${JSON.stringify(event)}`, "debug");
+	// logLine(`In handler with event: ${JSON.stringify(event)}`, "debug");
 
 	const kvsResponse = await kvsGet("config", kvsHandle, "json");
 
@@ -224,7 +224,7 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 		return sendError(403, "Forbidden", "", kvsResponse.none);
 	}
 
-	logLine("Config fetched from KVS", "info");
+	logLine("Config fetched from kvs", "info");
 
 	const config = Object.assign(defaultConfig, kvsResponse.some as UrlRewrite.Config);
 
@@ -236,9 +236,11 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 	const IMGPROXY_SIGNATURE_SIZE = config.imgproxy_signature_size;
 
 	/**
-	 *  TODO: implement JWT signing for debug access
+	 *  TODO:
+	 *  [ ] implement debug response headers
+	 *  [ ] implement JWT signing for debug access
 	 */
-	const debugRequest = false;
+	// const debugRequest = false;
 	// 	LOG_LEVEL === resolveLogLevel("debug") &&
 	// 	"debug" in request.headers &&
 	// 	request.headers.debug.value === "true";
@@ -252,8 +254,8 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 	const request = event.request;
 	const requestUri = request.uri;
 
-	logLine(`Source: ${request.headers.host.value}${request.uri}`, "debug");
-	logLine("parsing uri", "info");
+	// logLine(`Source: ${request.headers.host.value}${request.uri}`, "debug");
+	// logLine("parsing uri", "info");
 
 	const imgproxyUriRegexp = new RegExp(
 		`^\\/([^\\/]+)\\/((?:[a-z]+\\${IMGPROXY_ARGUMENTS_SEPARATOR}[^\\/]+\\/)+)?(plain\\/|enc\\/)?(.+)`,
@@ -263,23 +265,25 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 	const uriRegexpResult = imgproxyUriRegexp.exec(requestUri);
 
 	if (uriRegexpResult === null) {
-		const res = sendError(403, "Forbidden", "", new Error("Unable to parse URI"));
-		if (debugRequest) {
-			setDebugInfo(res, requestUri, undefined, signingEnabled);
-		}
-		return res;
+		// const res = sendError(403, "Forbidden", "", new Error("Unable to parse URI"));
+		// if (debugRequest) {
+		// 	setDebugInfo(res, requestUri, undefined, signingEnabled);
+		// }
+		// return res;
+		return sendError(403, "Forbidden", "", new Error("Unable to parse URI"));
 	}
 
 	if (uriRegexpResult[1] === undefined) {
-		const res = sendError(403, "Forbidden", "", new Error("Signature is missing from URI"));
-		if (debugRequest) {
-			setDebugInfo(res, requestUri, undefined, signingEnabled);
-		}
-		return res;
+		// const res = sendError(403, "Forbidden", "", new Error("Signature is missing from URI"));
+		// if (debugRequest) {
+		// 	setDebugInfo(res, requestUri, undefined, signingEnabled);
+		// }
+		// return res;
+		return sendError(403, "Forbidden", "", new Error("Unable to parse URI"));
 	}
 
 	logLine("uri parsing successful", "info");
-	logLine(`uri parsing result: ${JSON.stringify(uriRegexpResult)}`, "debug");
+	// logLine(`uri parsing result: ${JSON.stringify(uriRegexpResult)}`, "debug");
 
 	const signature = uriRegexpResult[1];
 	const processingOptionsString = uriRegexpResult[2] ?? "";
@@ -288,7 +292,7 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 
 	if (signingEnabled && !config.imgproxy_trusted_signatures.includes(signature)) {
 		try {
-			validate_signature(
+			validateSignature(
 				signature,
 				IMGPROXY_SALT,
 				`/${processingOptionsString}${sourceUrlType}${sourceUrl}`,
@@ -296,152 +300,107 @@ async function handler(event: AWSCloudFrontFunction.Event) {
 				IMGPROXY_SIGNATURE_SIZE,
 			);
 		} catch (err) {
+			// const res = sendError(403, "Forbidden", "", new Error("Signature is missing from URI"));
+			// if (debugRequest) {
+			// 	setDebugInfo(res, requestUri, undefined, signingEnabled);
+			// }
+			// return res;
 			const res = sendError(403, "Forbidden", "", new Error("Signature verification failed"));
-			if (debugRequest) {
-				setDebugInfo(res, requestUri, undefined, signingEnabled);
-			}
-			return res;
 		}
 	}
 
-	const optionStrings = _trimSeparators(processingOptionsString).split("/");
+	const optionStrings = trimSeparators(processingOptionsString).split("/");
 	const normalizedOptionMap: Record<string, [number, [string, string]]> = {};
 	let mapOrder = 0;
 	let presetCount = 0;
 	logLine("mapping processing options", "info");
 	for (let i = 0; i < optionStrings.length; i++) {
 		const optionArr = optionStrings[i].split(IMGPROXY_ARGUMENTS_SEPARATOR);
-		logLine(
-			`parsed option: ${JSON.stringify({
-				index: i,
-				option_arr: optionArr,
-			})}`,
-			"debug",
-		);
 		const option = optionArr.shift();
 		const args = optionArr;
 		if (option !== undefined && args.length > 0) {
 			const optionMap = indexedOptions[option];
 			if (optionMap !== undefined) {
-				if ((<ImgproxyMetaOption>optionMap).meta !== undefined) {
-					const metaOptions = (<ImgproxyMetaOption>optionMap).metaOptions;
-					for (let metaOptionIndex = 0; metaOptionIndex < metaOptions.length; metaOptionIndex++) {
-						const metaOption = metaOptions[metaOptionIndex];
-						if (args[metaOptionIndex] !== undefined) {
-							const individualOptionArgs =
-								metaOptionIndex === metaOptions.length - 1
-									? args.slice(metaOptionIndex)
-									: [args[metaOptionIndex]];
+				if ((optionMap as ImgproxyMetaOption).meta) {
+					const metaOptions = (optionMap as ImgproxyMetaOption).metaOptions;
+					for (let j = 0; j < metaOptions.length; j++) {
+						const metaOption = metaOptions[j];
+						if (args[j] !== undefined) {
+							const individualOptionArgs = j === metaOptions.length - 1 ? args.slice(j) : [args[j]];
 							const metaOptionMap = indexedOptions[metaOption];
 							if (metaOptionMap !== undefined) {
 								const preferredKey = metaOptionMap.short ?? metaOption;
-								delete normalizedOptionMap[preferredKey];
 								normalizedOptionMap[preferredKey] = [
 									mapOrder++,
-									[preferredKey, individualOptionArgs.join(IMGPROXY_ARGUMENTS_SEPARATOR)],
+									[
+										preferredKey,
+										preferredKey +
+											IMGPROXY_ARGUMENTS_SEPARATOR +
+											individualOptionArgs.join(IMGPROXY_ARGUMENTS_SEPARATOR),
+									],
 								];
-								logLine(
-									`mapped meta option: og:${metaOption}:pk:${preferredKey}:args:${normalizedOptionMap[preferredKey]}`,
-									"debug",
-								);
 							}
 						}
 					}
 				} else {
 					const preferredKey = optionMap.short ?? option;
-					// handle multiple presets
-					if (preferredKey === "pr") {
-						normalizedOptionMap[`${preferredKey}${presetCount++}`] = [
-							mapOrder++,
-							[preferredKey, args.join(IMGPROXY_ARGUMENTS_SEPARATOR)],
-						];
-					} else {
-						delete normalizedOptionMap[preferredKey];
-						normalizedOptionMap[preferredKey] = [
-							mapOrder++,
-							[preferredKey, args.join(IMGPROXY_ARGUMENTS_SEPARATOR)],
-						];
-					}
-
-					logLine(
-						`mapped option: og:${option}:pk:${preferredKey}:args:${normalizedOptionMap[preferredKey]}`,
-						"debug",
-					);
+					normalizedOptionMap[`${preferredKey}${preferredKey === "pr" ? presetCount++ : ""}`] = [
+						mapOrder++,
+						[
+							preferredKey,
+							preferredKey + IMGPROXY_ARGUMENTS_SEPARATOR + args.join(IMGPROXY_ARGUMENTS_SEPARATOR),
+						],
+					];
 				}
 			}
 		}
 	}
+	// logLine(`option_partitions: ${JSON.stringify(normalizedOptionMap)}`, "debug");
 
-	logLine(`option_partitions: ${JSON.stringify(normalizedOptionMap)}`, "debug");
 	logLine("normalizing options map", "info");
-
 	const optionEntries = Object.values(normalizedOptionMap)
 		.sort((a, b) => a[0] - b[0])
 		.map((v) => v[1]);
 
-	logLine(`option_entries: ${JSON.stringify(optionEntries)}`, "debug");
+	// logLine(`option_entries: ${JSON.stringify(optionEntries)}`, "debug");
 
 	const partitionedStrings: string[] = [];
 	let temp: [string, string][] = [];
-	const joinEntry = (entry: [string, string]) => entry.join(IMGPROXY_ARGUMENTS_SEPARATOR);
-	const joinPath = (pathArr: string[]) => pathArr.join("/");
 	for (let i = 0; i < optionEntries.length; i++) {
 		const entry = optionEntries[i];
 		if (entry[0] === "pr") {
 			temp.sort(optionPriorityOrder).push(entry);
-			partitionedStrings.push(joinPath(temp.map(joinEntry)));
+			partitionedStrings.push(temp.map((e) => e[1]).join("/"));
 			temp = [];
 		} else {
 			temp.push(entry);
 		}
 	}
+	// handle trailing partition
 	if (temp.length) {
-		partitionedStrings.push(joinPath(temp.sort(optionPriorityOrder).map(joinEntry)));
+		partitionedStrings.push(
+			temp
+				.sort(optionPriorityOrder)
+				.map((e) => e[1])
+				.join("/"),
+		);
 	}
 
-	logLine(`normalized_option_string: ${JSON.stringify(partitionedStrings)}`, "debug");
+	const normalizedOptionsString = partitionedStrings.join("/");
 
-	const normalizedOptionsString = joinPath(partitionedStrings);
-
-	// const optionPartitions = optionEntries.reduce(
-	// 	(result, entry) => {
-	// 		if (entry[0] === "preset" || entry[0] === "pr") {
-	// 			result[result.length] = [entry];
-	// 			result[result.length] = [];
-	// 		} else {
-	// 			result[result.length - 1].push(entry);
-	// 		}
-	// 		return result;
-	// 	},
-	// 	[[]] as [string, string][][],
-	// );
-
-	// debugLog(`option_partitions: ${JSON.stringify(optionPartitions)}`, "debug");
-
-	// const normalizedOptionsString = optionPartitions
-	// 	.reduce((result, partition) => {
-	// 		if (partition.length) {
-	// 			result.push(
-	// 				partition
-	// 					.sort(optionPriorityOrder)
-	// 					.map((entry) => entry.join(IMGPROXY_ARGUMENTS_SEPARATOR))
-	// 					.join("/"),
-	// 			);
-	// 		}
-	// 		return result;
-	// 	}, [] as string[])
-	// 	.join("/");
-
-	logLine("options map normalized", "info");
-	logLine(`normalized_option_string: ${normalizedOptionsString}`, "debug");
+	logLine("options_map normalized", "info");
+	// logLine(`normalized_option_string: ${normalizedOptionsString}`, "debug");
 
 	const newImgproxyPath = `/${normalizedOptionsString}/${sourceUrlType}${sourceUrl}`;
 	const resultUri = `/${_sign(IMGPROXY_SALT, newImgproxyPath, IMGPROXY_KEY, IMGPROXY_SIGNATURE_SIZE)}${newImgproxyPath}`;
 	request.uri = resultUri;
 
-	if (debugRequest) {
-		setDebugInfo(request, requestUri, resultUri, signingEnabled);
-	}
+	/**
+	 * TODO: cont. implement debug response headers
+	 */
+	// if (debugRequest) {
+	// 	setDebugInfo(request, requestUri, resultUri, signingEnabled);
+	// }
 	return request;
 }
 
@@ -464,20 +423,18 @@ async function kvsGet<K extends keyof KeyValueStore.ValueFormat>(
 }
 
 /**
+ * U T I L I T Y
+ */
+
+function trimSeparators(str: string) {
+	return str.replaceAll(/^\/|\/$/g, "");
+}
+
+/**
  * S I G N I N G
  */
 
-function validate_signature(
-	signature: string,
-	salt: string,
-	target: string,
-	key: string,
-	size: number,
-) {
-	_verifySignature(signature, salt, target, key, size);
-}
-
-function _verifySignature(
+function validateSignature(
 	signature: string,
 	salt: string,
 	target: string,
@@ -512,16 +469,12 @@ function _hexDecode(hex: string) {
 	return Buffer.from(hex, "hex");
 }
 
-function _trimSeparators(str: string) {
-	return str.replaceAll(/^\/|\/$/g, "");
-}
-
 /**
  * L O G G I N G
  */
 
 function resolveLogLevel(level: UrlRewrite.LogLevel): number {
-	return logLevelMap[level]?.index ?? Number.POSITIVE_INFINITY;
+	return (logLevelMap[level] ?? {}).index ?? Number.POSITIVE_INFINITY;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: <explanation>
@@ -531,21 +484,28 @@ function logLine(logline: any, level: UrlRewrite.LogLevel) {
 	}
 }
 
-function setDebugInfo(
-	reqres: AWSCloudFrontFunction.Request | AWSCloudFrontFunction.Response,
-	requestUri: string,
-	resultUri: string | undefined,
-	signingEnabled: boolean,
-) {
-	reqres.headers = reqres.headers ?? {};
-	reqres.headers["x-debug"] = {
-		value: JSON.stringify({
-			request_uri: requestUri,
-			result_uri: resultUri,
-			signing_enabled: signingEnabled,
-		}),
-	};
-}
+/**
+ * D E B U G
+ */
+
+/**
+ * TODO: cont. implement debug response headers
+ */
+// function setDebugInfo(
+// 	reqres: AWSCloudFrontFunction.Request | AWSCloudFrontFunction.Response,
+// 	requestUri: string,
+// 	resultUri: string | undefined,
+// 	signingEnabled: boolean,
+// ) {
+// 	reqres.headers = reqres.headers ?? {};
+// 	reqres.headers["x-debug"] = {
+// 		value: JSON.stringify({
+// 			request_uri: requestUri,
+// 			result_uri: resultUri,
+// 			signing_enabled: signingEnabled,
+// 		}),
+// 	};
+// }
 
 /**
  * E R R O R
