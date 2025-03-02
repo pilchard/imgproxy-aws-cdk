@@ -1,10 +1,7 @@
 /**
  * TODO:
- * [x] change to ESM import statements
- * [x] use JSON kvs value for configuration
  * [ ] inline extraneous functions
  * [ ] test/streamline code for aws-js2.0
- * [x] handle multiple `preset` options
  */
 
 // @ts-ignore: CloudFront Function runtime import
@@ -13,7 +10,10 @@ import crypto from "crypto";
 // @ts-ignore: CloudFront Function runtime import
 import cf from "cloudfront";
 
-import type { ImgproxyMetaOption, ImgproxyOption } from "../../scripts/functions/url-rewrite/processing-options";
+import type { AWSKeyValueStore } from "./aws-keyvaluestore.d.ts";
+import type { ImgproxyMetaOption, ImgproxyOption } from "./processing-options";
+import type { UrlRewrite } from "./url-rewrite.d.ts";
+import type { Option } from "./utility.d.ts";
 
 /**
  * D A T A
@@ -183,7 +183,7 @@ let LOG_LEVEL = resolveLogLevel("none");
  * H A N D L E R
  */
 
-async function handler(event: AWSCloudFrontFunction.Event) {
+async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCloudFrontFunction.Request | AWSCloudFrontFunction.Response> {
 	// logLine(`In handler with event: ${JSON.stringify(event)}`, "debug");
 
 	const kvsResponse = await kvsGet("config", kvsHandle, "json");
@@ -361,11 +361,11 @@ async function handler(event: AWSCloudFrontFunction.Event) {
  * K E Y  V A L U E  S T O R E
  */
 
-async function kvsGet<K extends keyof KeyValueStore.ValueFormat>(
+async function kvsGet<K extends keyof AWSKeyValueStore.ValueFormat>(
 	key: string,
-	handle: KeyValueStore.Handle,
+	handle: AWSKeyValueStore.Handle,
 	format: K,
-): Promise<Option<KeyValueStore.ValueFormat[K], Error>> {
+): Promise<Option<AWSKeyValueStore.ValueFormat[K], Error>> {
 	try {
 		return { some: await handle.get(`${key}`, { format: format }) };
 	} catch (err) {
@@ -461,47 +461,4 @@ function sendError(statusCode: number, statusText: string, body: string, error: 
 	logLine(body, "error");
 	logLine(error, "error");
 	return { statusCode, statusText, body } as AWSCloudFrontFunction.Response;
-}
-
-/**
- * T Y P E S
- */
-
-type Option<T, E> = { some: T; none?: undefined; } | { some?: undefined; none: E; };
-
-namespace KeyValueStore {
-	export type ValueFormat = { string: string; json: Record<string, unknown>; bytes: Buffer; };
-
-	export type Handle = {
-		get: <K extends keyof ValueFormat>(key: string, options: { format: K; }) => Promise<ValueFormat[K]> | never;
-		exists: (key: string) => Promise<boolean>;
-		meta: () => Promise<MetaDataResponse>;
-	};
-
-	export type MetaDataResponse = {
-		/**
-		 * The date and time that the key value store was created, in ISO 8601 format.
-		 */
-		creationDateTime: string;
-		/**
-		 * The date and time that the key value store was last synced from the source, in ISO 8601 format. The value doesn't include the propagation time to the edge.
-		 */
-		lastUpdatedDateTime: string;
-		/**
-		 * The total number of keys in the KVS after the last sync from the source.
-		 */
-		keyCount: number;
-	};
-}
-
-namespace UrlRewrite {
-	export type Config = {
-		imgproxy_salt: string;
-		imgproxy_key: string;
-		imgproxy_signature_size: number;
-		imgproxy_trusted_signatures: string[];
-		imgproxy_arguments_separator: string;
-		log_level: LogLevel;
-	};
-	export type LogLevel = "none" | "error" | "warn" | "info" | "debug";
 }
