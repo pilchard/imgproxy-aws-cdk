@@ -1,0 +1,17 @@
+{
+	"private": true,
+	"name": "cloudfront",
+	"version": "1.0.0",
+	"nonNpm": true,
+	"type": "module",
+	"main": "index.js",
+	"module": "index.ts",
+	"description": "Mock cloudfront helpers for local dev",
+	"license": "ISC",
+	"owners": [
+		{
+			"name": "Bryan Reedy",
+			"githubUsername": "pilchard"
+		}
+	]
+}

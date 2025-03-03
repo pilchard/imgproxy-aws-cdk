@@ -58,7 +58,7 @@
 		"exportDeclaration.sortNamedExports": "caseInsensitive",
 		"exportDeclaration.sortTypeOnlyExports": "none",
 		"importDeclaration.sortNamedImports": "caseInsensitive",
-		"importDeclaration.sortTypeOnlyImports": "none",
+		"importDeclaration.sortTypeOnlyImports": "last",
 		"ignoreNodeCommentText": "dprint-ignore",
 		"ignoreFileCommentText": "dprint-ignore-file",
 		"exportDeclaration.forceSingleLine": false,

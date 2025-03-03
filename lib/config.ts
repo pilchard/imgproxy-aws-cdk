@@ -1,10 +1,10 @@
 import path from "node:path";
 import { getOriginShieldRegion } from "./origin-shield.js";
 
-import { fileURLToPath } from "node:url";
+// import { fileURLToPath } from "node:url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = path.dirname(__filename);
 import * as dotenv from "dotenv";
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
@@ -24,14 +24,12 @@ export const getConfig = (): ConfigProps => {
 		ENABLE_URL_SIGNING: parseBoolean(process.env.ENABLE_URL_SIGNING) ?? true,
 		// LAMBDA
 		LAMBDA_FUNCTION_NAME: process.env.IMGPROXY_FUNCTION_NAME || lambdaFunctionNameDefault,
-		LAMBDA_ECR_REPOSITORY_NAME:
-			process.env.LAMBDA_ECR_REPOSITORY_NAME || lambdaEcrRepositoryNameDefault,
+		LAMBDA_ECR_REPOSITORY_NAME: process.env.LAMBDA_ECR_REPOSITORY_NAME || lambdaEcrRepositoryNameDefault,
 		LAMBDA_ARCHITECTURE: process.env.IMGPROXY_ARCHITECTURE || "ARM64",
 		LAMBDA_MEMORY_SIZE: parseNumber(process.env.IMGPROXY_MEMORY_SIZE, 2048),
 		LAMBDA_TIMEOUT: parseNumber(process.env.IMGPROXY_TIMEOUT, 60),
 		// SSM
-		SYSTEMS_MANAGER_PARAMETERS_BASE_PATH:
-			process.env.SYSTEMS_MANAGER_PARAMETERS_PATH || process.env.STACK_NAME || stackNameDefault,
+		SYSTEMS_MANAGER_PARAMETERS_BASE_PATH: process.env.SYSTEMS_MANAGER_PARAMETERS_PATH || process.env.STACK_NAME || stackNameDefault,
 		// S3
 		S3_CREATE_DEFAULT_BUCKETS: parseBoolean(process.env.S3_CREATE_DEFAULT_BUCKETS) ?? false,
 		S3_CREATE_BUCKETS: parseArray(process.env.S3_CREATE_BUCKETS),
@@ -40,14 +38,10 @@ export const getConfig = (): ConfigProps => {
 		S3_MULTI_REGION: parseBoolean(process.env.S3_MULTI_REGION) ?? false,
 		S3_CLIENT_SIDE_DECRYPTION: parseBoolean(process.env.S3_CLIENT_SIDE_DECRYPTION) ?? false,
 		// CLOUDFRONT
-		CREATE_CLOUD_FRONT_DISTRIBUTION:
-			parseBoolean(process.env.CREATE_CLOUD_FRONT_DISTRIBUTION) ?? true,
-		CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION:
-			parseBoolean(process.env.CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION) ?? true,
+		CREATE_CLOUD_FRONT_DISTRIBUTION: parseBoolean(process.env.CREATE_CLOUD_FRONT_DISTRIBUTION) ?? true,
+		CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION: parseBoolean(process.env.CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION) ?? true,
 		ENABLE_STATIC_ORIGIN: parseBoolean(process.env.CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION) ?? true,
-		CLOUDFRONT_ORIGIN_SHIELD_REGION: getOriginShieldRegion(
-			process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1",
-		),
+		CLOUDFRONT_ORIGIN_SHIELD_REGION: getOriginShieldRegion(process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1"),
 		CLOUDFRONT_CORS_ENABLED: parseBoolean(process.env.CLOUDFRONT_CORS_ENABLED) ?? true,
 		// SAMPLE
 		DEPLOY_SAMPLE_WEBSITE: parseBoolean(process.env.DEPLOY_SAMPLE_WEBSITE) ?? false,
@@ -88,10 +82,7 @@ export function parseArray(str: string | undefined): string[] {
 		return [];
 	}
 
-	return str
-		.split(",")
-		.map((s) => s.trim())
-		.filter((s) => s !== "");
+	return str.split(",").map((s) => s.trim()).filter((s) => s !== "");
 }
 
 export type ConfigProps = {

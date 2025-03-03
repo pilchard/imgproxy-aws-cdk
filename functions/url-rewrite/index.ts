@@ -10,6 +10,7 @@ import crypto from "crypto";
 
 import cf from "cloudfront";
 
+import type { AWSCloudFront } from "cloudfront";
 import type { ImgproxyMetaOption, ImgproxyOption } from "./processing-options";
 import type { UrlRewrite } from "./url-rewrite.d.ts";
 import type { Option } from "./utility.d.ts";
@@ -182,7 +183,7 @@ let LOG_LEVEL = resolveLogLevel("none");
  * H A N D L E R
  */
 
-async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCloudFrontFunction.Request | AWSCloudFrontFunction.Response> {
+export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCloudFrontFunction.Request | AWSCloudFrontFunction.Response> {
 	// logLine(`In handler with event: ${JSON.stringify(event)}`, "debug");
 
 	const kvsResponse = await kvsGet("config", kvsHandle, "json");
@@ -272,7 +273,7 @@ async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCloudFron
 			// 	setDebugInfo(res, requestUri, undefined, signingEnabled);
 			// }
 			// return res;
-			const res = sendError(403, "Forbidden", "", new Error("Signature verification failed"));
+			return sendError(403, "Forbidden", "", new Error("Signature verification failed"));
 		}
 	}
 
@@ -360,11 +361,11 @@ async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCloudFron
  * K E Y  V A L U E  S T O R E
  */
 
-async function kvsGet<K extends keyof AWSCloudFront.ValueFormat>(
+async function kvsGet<K extends AWSCloudFront.ValueFormatLabel>(
 	key: string,
 	handle: AWSCloudFront.Handle,
 	format: K,
-): Promise<Option<AWSCloudFront.ValueFormat[K], Error>> {
+): Promise<Option<AWSCloudFront.ValueFormat<K>, Error>> {
 	try {
 		return { some: await handle.get(`${key}`, { format: format }) };
 	} catch (err) {
