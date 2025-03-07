@@ -13,5 +13,8 @@
 			"name": "Bryan Reedy",
 			"githubUsername": "pilchard"
 		}
-	]
+	],
+	"devDependencies": {
+		"@types/node": "^22.13.8"
+	}
 }

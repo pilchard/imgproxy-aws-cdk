@@ -1,2 +1,2 @@
 export { default, key_value_store } from "./cloudfront";
-export { AWSCloudFront } from "./types";
+export type { AWSCloudFront } from "./types";

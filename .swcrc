@@ -9,7 +9,7 @@
         "minify": {
             "compress": false,
             "mangle": {
-                "toplevel": true,
+                "toplevel": false,
                 "keep_classnames": false,
                 "keep_fnames": false,
                 "keep_private_props": false,
@@ -21,6 +21,6 @@
     "module": {
         "type": "es6"
     },
-    "minify": true,
+    "minify": false,
     "isModule": true
 }

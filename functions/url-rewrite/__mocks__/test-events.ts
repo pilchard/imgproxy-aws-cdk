@@ -5,7 +5,7 @@ export const event1: AWSCloudFrontFunction.Event = {
 	request: {
 		method: "GET",
 		uri: "/YxO8v7pFlkKUj_HRHfa78J-MTQlG-8H2GinL1OYb-9Y/rs:fill:418:564:0/g:sowe/h:100/preset:tall/preset:wide/g:ce/w:30/preset:cat/czM6Ly9pbWdwcm94eS1pbWFnZS1idWNrZXQvMjAyNDEyMTctRFNDXzA4MjlfY2xvc2UtY3JvcF9iLXcucG5n",
-		headers: { host: { value: "https://d16u1rzn9plp8l.cloudfront.net" }, accept: { value: "image/*" } },
+		headers: { host: { value: "https://test.local" }, accept: { value: "image/*" } },
 		querystring: {},
 		cookies: {},
 	},

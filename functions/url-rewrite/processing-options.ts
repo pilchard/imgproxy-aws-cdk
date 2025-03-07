@@ -1,39 +1,17 @@
 import { createWriteStream, writeFileSync } from "node:fs";
-import { getConfig } from "../../../lib/config";
+import { getConfig } from "../../lib/config";
 
 const config = getConfig();
 const { ENABLE_PRO_OPTIONS } = config;
 
-export type ImgproxyBaseOption = {
-	full: string;
-	short: string;
-	alt?: string;
-	pro?: boolean;
-	pkl?: "full" | "short" | "alt";
-};
-export type ImgproxyMetaOption = ImgproxyBaseOption & {
-	meta: boolean;
-	metaOptions: string[];
-};
+export type ImgproxyBaseOption = { full: string; short: string; alt?: string; pro?: boolean; pkl?: "full" | "short" | "alt"; };
+export type ImgproxyMetaOption = ImgproxyBaseOption & { meta: boolean; metaOptions: string[]; };
 export type ImgproxyOption = ImgproxyBaseOption | ImgproxyMetaOption;
 
 const imgproxyProcessingOptions: ImgproxyOption[] = [
-	{
-		full: "resize",
-		short: "rs",
-		meta: true,
-		metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"],
-	},
-	{
-		full: "size",
-		short: "s",
-		meta: true,
-		metaOptions: ["width", "height", "enlarge", "extend"],
-	},
-	{
-		full: "resizing_type",
-		short: "rt",
-	},
+	{ full: "resize", short: "rs", meta: true, metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"] },
+	{ full: "size", short: "s", meta: true, metaOptions: ["width", "height", "enlarge", "extend"] },
+	{ full: "resizing_type", short: "rt" },
 	{ full: "resizing_algorithm", short: "ra", pro: true },
 	{ full: "width", short: "w" },
 	{ full: "height", short: "h" },
@@ -53,13 +31,7 @@ const imgproxyProcessingOptions: ImgproxyOption[] = [
 	{ full: "rotate", short: "rot" },
 	{ full: "background", short: "bg" },
 	{ full: "background_alpha", short: "bga", pro: true },
-	{
-		full: "adjust",
-		short: "a",
-		pro: true,
-		meta: true,
-		metaOptions: ["brightness", "contrast", "saturation"],
-	},
+	{ full: "adjust", short: "a", pro: true, meta: true, metaOptions: ["brightness", "contrast", "saturation"] },
 	{ full: "brightness", short: "br", pro: true },
 	{ full: "contrast", short: "co", pro: true },
 	{ full: "saturation", short: "sa", pro: true },
@@ -123,9 +95,7 @@ function indexAndWrite(arr: ImgproxyOption[], enableProOptions: boolean) {
 			continue;
 		}
 
-		const keys = (["full", "short", "alt"] as const)
-			.map((k) => option[k])
-			.filter((v) => v !== undefined);
+		const keys = (["full", "short", "alt"] as const).map((k) => option[k]).filter((v) => v !== undefined);
 		const preferredKey = keys.reduce((r, k) => (k.length < r.length ? k : r));
 		console.log(preferredKey);
 		preferredKeys.push(preferredKey);
@@ -138,12 +108,8 @@ function indexAndWrite(arr: ImgproxyOption[], enableProOptions: boolean) {
 		}
 	}
 
-	writeFileSync("./functions/url-rewrite/processing-options.json", JSON.stringify(result), "utf8");
-	writeFileSync(
-		"./functions/url-rewrite/processing-options-order.json",
-		JSON.stringify(preferredKeys),
-		"utf8",
-	);
+	writeFileSync("./functions/url-rewrite/imgproxy-indexed-options.json", JSON.stringify(result), "utf8");
+	writeFileSync("./functions/url-rewrite/imgproxy-option-priority.json", JSON.stringify(preferredKeys), "utf8");
 }
 
 indexAndWrite(imgproxyProcessingOptions, ENABLE_PRO_OPTIONS);

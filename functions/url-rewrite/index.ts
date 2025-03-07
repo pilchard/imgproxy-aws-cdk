@@ -178,6 +178,7 @@ const defaultConfig: UrlRewrite.Config = {
 };
 
 let LOG_LEVEL = resolveLogLevel("none");
+let IMGPROXY_ARGUMENTS_SEPARATOR = defaultConfig.imgproxy_arguments_separator;
 
 /**
  * H A N D L E R
@@ -196,9 +197,11 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 
 	const config = Object.assign(defaultConfig, kvsResponse.some as UrlRewrite.Config);
 
+	// update globals
 	LOG_LEVEL = resolveLogLevel(config.log_level);
+	IMGPROXY_ARGUMENTS_SEPARATOR = config.imgproxy_arguments_separator;
 
-	const IMGPROXY_ARGUMENTS_SEPARATOR = config.imgproxy_arguments_separator;
+	// signing settings
 	const IMGPROXY_SALT = config.imgproxy_salt;
 	const IMGPROXY_KEY = config.imgproxy_key;
 	const IMGPROXY_SIGNATURE_SIZE = config.imgproxy_signature_size;
@@ -279,59 +282,58 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 
 	const optionStrings = trimSeparators(processingOptionsString).split("/");
 	const normalizedOptionMap: Record<string, [number, [string, string]]> = {};
-	let mapOrder = 0;
-	let presetCount = 0;
+
+	// let _mapOrder = 0;
+	// let _prCount = 0;
 	logLine("mapping processing options", "info");
+
+	const parsedOptionArr: [string, string][] = [];
+
+	const isMetaOption = (option: ImgproxyOption | ImgproxyMetaOption): option is ImgproxyMetaOption => {
+		return (option as ImgproxyMetaOption).meta !== undefined && (option as ImgproxyMetaOption).meta;
+	};
+	const parsedOption = (
+		preferredKey: string,
+		args: string[],
+	): [string, string] => [preferredKey, preferredKey + IMGPROXY_ARGUMENTS_SEPARATOR + args.join(IMGPROXY_ARGUMENTS_SEPARATOR)];
+
 	for (let i = 0; i < optionStrings.length; i++) {
 		const optionArr = optionStrings[i].split(IMGPROXY_ARGUMENTS_SEPARATOR);
-		const option = optionArr.shift();
-		const args = optionArr;
-		if (option !== undefined && args.length > 0) {
-			const optionMap = indexedOptions[option];
-			if (optionMap !== undefined) {
-				if ((optionMap as ImgproxyMetaOption).meta) {
-					const metaOptions = (optionMap as ImgproxyMetaOption).metaOptions;
-					for (let j = 0; j < metaOptions.length; j++) {
-						const metaOption = metaOptions[j];
-						if (args[j] !== undefined) {
-							const individualOptionArgs = j === metaOptions.length - 1 ? args.slice(j) : [args[j]];
-							const metaOptionMap = indexedOptions[metaOption];
-							if (metaOptionMap !== undefined) {
-								const preferredKey = metaOptionMap.short ?? metaOption;
-								normalizedOptionMap[preferredKey] = [mapOrder++, [
-									preferredKey,
-									preferredKey + IMGPROXY_ARGUMENTS_SEPARATOR + individualOptionArgs.join(IMGPROXY_ARGUMENTS_SEPARATOR),
-								]];
-							}
-						}
-					}
-				} else {
-					const preferredKey = optionMap.short ?? option;
-					normalizedOptionMap[`${preferredKey}${preferredKey === "pr" ? presetCount++ : ""}`] = [mapOrder++, [
-						preferredKey,
-						preferredKey + IMGPROXY_ARGUMENTS_SEPARATOR + args.join(IMGPROXY_ARGUMENTS_SEPARATOR),
-					]];
+		if (optionArr.length >= 2) {
+			const option = indexedOptions[optionArr[0]];
+			const args = optionArr.slice(1);
+			if (isMetaOption(option)) {
+				const metaOptions = option.metaOptions;
+				for (let j = 0; j < metaOptions.length; j++) {
+					const metaOption = indexedOptions[metaOptions[j]];
+					const metaOptionArgs = j === metaOptions.length - 1 ? args.slice(j) : [args[j]];
+					parsedOptionArr.push(parsedOption(metaOption.short, metaOptionArgs));
 				}
+			} else {
+				parsedOptionArr.push(parsedOption(option.short, args));
 			}
 		}
 	}
 	// logLine(`option_partitions: ${JSON.stringify(normalizedOptionMap)}`, "debug");
 
+	console.log(parsedOptionArr);
 	logLine("normalizing options map", "info");
-	const optionEntries = Object.values(normalizedOptionMap).sort((a, b) => a[0] - b[0]).map((v) => v[1]);
 
+	const optionEntries = Object.values(normalizedOptionMap).sort((a, b) => a[0] - b[0]).map((v) => v[1]);
 	// logLine(`option_entries: ${JSON.stringify(optionEntries)}`, "debug");
 
+	const seen: string[] = [];
 	const partitionedStrings: string[] = [];
 	let temp: [string, string][] = [];
-	for (let i = 0; i < optionEntries.length; i++) {
+	for (let i = parsedOptionArr.length - 1; i >= 0; i--) {
 		const entry = optionEntries[i];
 		if (entry[0] === "pr") {
-			temp.sort(optionPriorityOrder).push(entry);
+			temp.sort(optionPriorityOrder).unshift(entry);
 			partitionedStrings.push(temp.map((e) => e[1]).join("/"));
 			temp = [];
-		} else {
+		} else if (!seen.includes(entry[0])) {
 			temp.push(entry);
+			seen.push(entry[0]);
 		}
 	}
 	// handle trailing partition
@@ -356,6 +358,21 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 	// }
 	return request;
 }
+
+/**
+ * O P T I O N  P R O C E S S I N G
+ */
+
+// function _expandMetaOption(option: ImgproxyMetaOption, args: string[]): [string, string][] {
+// 	const result: [string, string][] = [];
+// 	const metaOptions = option.metaOptions;
+// 	for (let i = 0; i < metaOptions.length; i++) {
+// 		const metaOption = indexedOptions[metaOptions[i]];
+// 		const metaOptionArgs = i === metaOptions.length - 1 ? args.slice(i) : [args[i]];
+// 		result.push([metaOption.short, metaOptionArgs.join(IMGPROXY_ARGUMENTS_SEPARATOR)]);
+// 	}
+// 	return result;
+// }
 
 /**
  * K E Y  V A L U E  S T O R E
