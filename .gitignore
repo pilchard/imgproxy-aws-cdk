@@ -17,6 +17,8 @@ package-lock.json
 # Build directories
 .dist/
 .build/
+.parcel-cache/
 
 # reference
 ref.*
+

@@ -11,7 +11,7 @@ import crypto from "crypto";
 import cf from "cloudfront";
 
 import type { AWSCloudFront } from "cloudfront";
-import type { ImgproxyMetaOption, ImgproxyOption } from "./processing-options";
+import type { ImgproxyMetaOption, ImgproxyOption } from "./imgproxy-options.ts";
 import type { UrlRewrite } from "./url-rewrite.d.ts";
 import type { Option } from "./utility.d.ts";
 
@@ -151,7 +151,7 @@ const optionPriority = [
 	"mafr",
 ];
 
-function optionPriorityOrder(a: string[], b: string[]) {
+function optionPriorityOrder(a: [string, string], b: [string, string]) {
 	return optionPriority.indexOf(a[0]) - optionPriority.indexOf(b[0]);
 }
 
@@ -178,7 +178,8 @@ const defaultConfig: UrlRewrite.Config = {
 };
 
 let LOG_LEVEL = resolveLogLevel("none");
-let IMGPROXY_ARGUMENTS_SEPARATOR = defaultConfig.imgproxy_arguments_separator;
+let ARGS_SEP = defaultConfig.imgproxy_arguments_separator;
+const PATH_SEP = "/";
 
 /**
  * H A N D L E R
@@ -199,7 +200,8 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 
 	// update globals
 	LOG_LEVEL = resolveLogLevel(config.log_level);
-	IMGPROXY_ARGUMENTS_SEPARATOR = config.imgproxy_arguments_separator;
+	ARGS_SEP = config.imgproxy_arguments_separator;
+	// PATH_SEP = "/";
 
 	// signing settings
 	const IMGPROXY_SALT = config.imgproxy_salt;
@@ -228,10 +230,7 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 	// logLine(`Source: ${request.headers.host.value}${request.uri}`, "debug");
 	// logLine("parsing uri", "info");
 
-	const imgproxyUriRegexp = new RegExp(
-		`^\\/([^\\/]+)\\/((?:[a-z]+\\${IMGPROXY_ARGUMENTS_SEPARATOR}[^\\/]+\\/)+)?(plain\\/|enc\\/)?(.+)`,
-		"g",
-	);
+	const imgproxyUriRegexp = new RegExp(`^\\/([^\\/]+)\\/((?:[a-z]+\\${ARGS_SEP}[^\\/]+\\/)+)?(plain\\/|enc\\/)?(.+)`, "g");
 
 	const uriRegexpResult = imgproxyUriRegexp.exec(requestUri);
 
@@ -280,71 +279,71 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 		}
 	}
 
-	const optionStrings = trimSeparators(processingOptionsString).split("/");
-	const normalizedOptionMap: Record<string, [number, [string, string]]> = {};
+	logLine("normalizing options", "info");
 
-	// let _mapOrder = 0;
-	// let _prCount = 0;
-	logLine("mapping processing options", "info");
+	const optionStrings = processingOptionsString.split(PATH_SEP).map((e) => e.split(ARGS_SEP)).filter((e) => e.length >= 2);
 
-	const parsedOptionArr: [string, string][] = [];
+	logLine(`option_strings: ${JSON.stringify(optionStrings)}`, "info");
 
-	const isMetaOption = (option: ImgproxyOption | ImgproxyMetaOption): option is ImgproxyMetaOption => {
-		return (option as ImgproxyMetaOption).meta !== undefined && (option as ImgproxyMetaOption).meta;
-	};
-	const parsedOption = (
-		preferredKey: string,
-		args: string[],
-	): [string, string] => [preferredKey, preferredKey + IMGPROXY_ARGUMENTS_SEPARATOR + args.join(IMGPROXY_ARGUMENTS_SEPARATOR)];
+	const partitionedOptionStrings: string[] = [];
+	const seen: Record<string, number> = {};
+	let partition: [string, string][] = [];
+	const stringify = () => partition.sort(optionPriorityOrder).map((e) => e[1]).join(PATH_SEP);
+	const optionTuple = (opt: string, args: string[]): [string, string] => [opt, opt + ARGS_SEP + args.join(ARGS_SEP)];
+	for (let i = optionStrings.length - 1; i >= 0; i--) {
+		const optionArr = optionStrings[i];
 
-	for (let i = 0; i < optionStrings.length; i++) {
-		const optionArr = optionStrings[i].split(IMGPROXY_ARGUMENTS_SEPARATOR);
-		if (optionArr.length >= 2) {
-			const option = indexedOptions[optionArr[0]];
-			const args = optionArr.slice(1);
-			if (isMetaOption(option)) {
-				const metaOptions = option.metaOptions;
-				for (let j = 0; j < metaOptions.length; j++) {
-					const metaOption = indexedOptions[metaOptions[j]];
+		const option = indexedOptions[optionArr[0]];
+		const args = optionArr.slice(1);
+
+		// expand meta options
+		if ((option as ImgproxyMetaOption).meta !== undefined && (option as ImgproxyMetaOption).meta) {
+			const metaOptions = (option as ImgproxyMetaOption).metaOptions;
+			for (let j = 0; j < metaOptions.length; j++) {
+				const metaOption = indexedOptions[metaOptions[j]];
+				if (j < args.length) {
 					const metaOptionArgs = j === metaOptions.length - 1 ? args.slice(j) : [args[j]];
-					parsedOptionArr.push(parsedOption(metaOption.short, metaOptionArgs));
+					const metaOptKey = metaOption.short;
+					if (!{}.hasOwnProperty.call(seen, metaOptKey)) {
+						partition.push(optionTuple(metaOptKey, metaOptionArgs));
+					}
 				}
-			} else {
-				parsedOptionArr.push(parsedOption(option.short, args));
+			}
+		} else {
+			const opt = option.short;
+
+			// partition if preset
+			if (opt === "pr") {
+				if (partition.length) {
+					partitionedOptionStrings.push(stringify());
+					partition = [];
+				}
+
+				// accumulate consecutive 'pr' options. ie. `pr:wide/pr:tall` -> `pr:wide:tall`
+				while (optionStrings[i - 1][0] === "pr" || optionStrings[i - 1][0] === "preset") {
+					args.push.apply(args, optionStrings[i - 1].slice(1));
+					i--;
+				}
+
+				// push preset
+				partitionedOptionStrings.push(optionTuple(opt, args)[1]);
+			} else if (!{}.hasOwnProperty.call(seen, opt)) {
+				// handle standard option
+				partition.push(optionTuple(opt, args));
+				seen[opt] = 1;
 			}
 		}
-	}
-	// logLine(`option_partitions: ${JSON.stringify(normalizedOptionMap)}`, "debug");
 
-	console.log(parsedOptionArr);
-	logLine("normalizing options map", "info");
-
-	const optionEntries = Object.values(normalizedOptionMap).sort((a, b) => a[0] - b[0]).map((v) => v[1]);
-	// logLine(`option_entries: ${JSON.stringify(optionEntries)}`, "debug");
-
-	const seen: string[] = [];
-	const partitionedStrings: string[] = [];
-	let temp: [string, string][] = [];
-	for (let i = parsedOptionArr.length - 1; i >= 0; i--) {
-		const entry = optionEntries[i];
-		if (entry[0] === "pr") {
-			temp.sort(optionPriorityOrder).unshift(entry);
-			partitionedStrings.push(temp.map((e) => e[1]).join("/"));
-			temp = [];
-		} else if (!seen.includes(entry[0])) {
-			temp.push(entry);
-			seen.push(entry[0]);
+		// handle trailing partition
+		if (i === 0 && partition.length) {
+			partitionedOptionStrings.push(stringify());
 		}
 	}
-	// handle trailing partition
-	if (temp.length) {
-		partitionedStrings.push(temp.sort(optionPriorityOrder).map((e) => e[1]).join("/"));
-	}
 
-	const normalizedOptionsString = partitionedStrings.join("/");
+	const normalizedOptionsString = partitionedOptionStrings.reverse().join(PATH_SEP);
 
-	logLine("options_map normalized", "info");
-	// logLine(`normalized_option_string: ${normalizedOptionsString}`, "debug");
+	logLine("normalized parsed options", "info");
+	logLine(`normalized_option_string: ${normalizedOptionsString}`, "debug");
 
 	const newImgproxyPath = `/${normalizedOptionsString}/${sourceUrlType}${sourceUrl}`;
 	const resultUri = `/${_sign(IMGPROXY_SALT, newImgproxyPath, IMGPROXY_KEY, IMGPROXY_SIGNATURE_SIZE)}${newImgproxyPath}`;
@@ -356,23 +355,9 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 	// if (debugRequest) {
 	// 	setDebugInfo(request, requestUri, resultUri, signingEnabled);
 	// }
+
 	return request;
 }
-
-/**
- * O P T I O N  P R O C E S S I N G
- */
-
-// function _expandMetaOption(option: ImgproxyMetaOption, args: string[]): [string, string][] {
-// 	const result: [string, string][] = [];
-// 	const metaOptions = option.metaOptions;
-// 	for (let i = 0; i < metaOptions.length; i++) {
-// 		const metaOption = indexedOptions[metaOptions[i]];
-// 		const metaOptionArgs = i === metaOptions.length - 1 ? args.slice(i) : [args[i]];
-// 		result.push([metaOption.short, metaOptionArgs.join(IMGPROXY_ARGUMENTS_SEPARATOR)]);
-// 	}
-// 	return result;
-// }
 
 /**
  * K E Y  V A L U E  S T O R E
@@ -388,14 +373,6 @@ async function kvsGet<K extends AWSCloudFront.ValueFormatLabel>(
 	} catch (err) {
 		return { none: new Error("Failed to retrieve value from key value store") };
 	}
-}
-
-/**
- * U T I L I T Y
- */
-
-function trimSeparators(str: string) {
-	return str.replaceAll(/^\/|\/$/g, "");
 }
 
 /**
