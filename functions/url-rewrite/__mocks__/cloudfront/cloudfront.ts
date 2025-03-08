@@ -1,5 +1,3 @@
-import type { AWSCloudFront } from "./types";
-
 export const key_value_store: Record<string, string> = {};
 
 const cloudfront: AWSCloudFront.KeyValueStore = {

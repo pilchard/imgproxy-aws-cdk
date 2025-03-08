@@ -1,4 +1,4 @@
-export declare namespace AWSCloudFront {
+declare namespace AWSCloudFront {
 	type KeyValueStore = {
 		kvs: () => Handle;
 		// updateRequestOrigin: () => void;

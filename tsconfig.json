@@ -1,32 +1,53 @@
 {
-  "compilerOptions": {
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "inlineSourceMap": true,
-    "inlineSources": true,
-    "experimentalDecorators": true,
-    "strictPropertyInitialization": true,
-    "esModuleInterop": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    // Emit
-    "removeComments": true,
-    "noEmit": true,
-    "declaration": false,
-    "target": "ES2018",
-    "module": "ES2022",
-    "lib": [
-      "ESNext"
-    ],
-  },
-  "exclude": [
-    "functions/**/*"
-  ],
+	"compilerOptions": {
+		/* Base Options: */
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"target": "es2022",
+		"allowJs": true,
+		"resolveJsonModule": true,
+		"moduleResolution": "bundler",
+		"moduleDetection": "force",
+		"isolatedModules": true,
+		"verbatimModuleSyntax": true,
+		"allowImportingTsExtensions": true,
+
+		/* Strictness */
+		"strict": true,
+		// "noUncheckedIndexedAccess": true,
+		"noImplicitOverride": true,
+		/* tsconfig/bases: https://github.com/tsconfig/bases/blob/031273b815ff7f672c7c9057fb7d19ef363054b1/bases/strictest.json */
+		"allowUnusedLabels": false,
+		"allowUnreachableCode": false,
+		"exactOptionalPropertyTypes": true,
+		"noFallthroughCasesInSwitch": true,
+		"noImplicitReturns": true,
+		// "noPropertyAccessFromIndexSignature": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"forceConsistentCasingInFileNames": true,
+
+		/* If transpiling with TypeScript: */
+		// "module": "NodeNext",
+		// "outDir": "dist",
+		// "sourceMap": true,
+
+		/* AND if you're building for a library: */
+		"declaration": true,
+
+		/* AND if you're building for a library in a monorepo: */
+		"composite": true,
+		"declarationMap": true,
+
+		/* If NOT transpiling with TypeScript: */
+		"module": "ES2022",
+		"noEmit": true,
+
+		/* If your code runs in the DOM: */
+		// "lib": ["es2022", "dom", "dom.iterable"],
+		/* If your code doesn't run in the DOM: */
+		"lib": [
+			"es2022"
+		]
+	}
 }

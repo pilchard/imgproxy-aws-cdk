@@ -2,41 +2,54 @@
 	"name": "imgproxy-aws-cdk",
 	"version": "0.1.0",
 	"type": "module",
+	"targets": {
+		"url-rewrite": {
+			"source": "functions/url-rewrite/index.ts",
+			"distDir": ".dist/url-rewrite",
+			"context": "node",
+			"isLibrary": true,
+			"outputFormat": "esmodule",
+			"includeNodeModules": false,
+			"scopeHoist": true,
+			"sourceMap": true,
+			"optimize": true,
+			"engines": {
+				"node": ">= 20"
+			}
+		},
+		"main": false
+	},
 	"bin": {
 		"imgproxy": "./bin/imgproxy.js"
 	},
 	"scripts": {
-		"build": "rm -rf ./.build  && swc ./functions --out-dir ./.build --config-file .swcrc --copy-files",
 		"watch": "tsc -w",
-		"test": "jest",
+		"test": "vitest",
 		"cdk": "cdk",
-		"proc-opt": "rm -rf ./functions/url-rewrite/indexed-processing-options.js && tsx ./scripts/functions/url-rewrite/processing-options.ts",
-		"parcel": "parcel build"
+		"typecheck": "tsc --noEmit",
+		"init-json": "rm -rf functions/url-rewrite/imgproxy-indexed-options.json functions/url-rewrite/imgproxy-option-priority.json && tsx ./functions/url-rewrite/imgproxy-options.ts",
+		"build": "pnpm run init-json && pnpm run typecheck && rm -rf ./.build && pnpm run build:parcel",
+		"build:swc": "swc ./functions/url-rewrite/index.ts --out-dir ./.build --config-file .swcrc",
+		"build:parcel": "parcel build",
+		"build:vite": "vite build"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
-		"@jest/globals": "^29.7.0",
-		"@swc/cli": "^0.6.0",
-		"@swc/core": "^1.11.1",
+		"@parcel/config-default": "^2.13.3",
+		"@parcel/plugin": "^2.13.3",
 		"@types/aws-cloudfront-function": "^1.0.4",
-		"@types/jest": "^29.5.14",
 		"@types/node": "22.13.5",
-		"@types/prompts": "^2.4.9",
 		"aws-cdk": "2.1001.0",
-		"cloudfront": "link:functions/url-rewrite/__mocks__/cloudfront",
 		"dotenv": "^16.4.7",
-		"esbuild": "^0.25.0",
-		"execa": "^9.5.2",
-		"jest": "^29.7.0",
 		"parcel": "^2.13.3",
-		"prompts": "^2.4.2",
-		"ts-jest": "^29.2.6",
 		"ts-node": "^10.9.2",
 		"tsx": "^4.19.3",
-		"typescript": "~5.7.3"
+		"typescript": "5.8.2",
+		"vitest": "^3.0.8"
 	},
 	"dependencies": {
 		"aws-cdk-lib": "2.181.0",
+		"cloudfront": "link:functions/url-rewrite/__mocks__/cloudfront",
 		"constructs": "^10.4.2",
 		"source-map-support": "^0.5.21"
 	},

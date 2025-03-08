@@ -1,7 +1,3 @@
-*.js
-!/functions/url-rewrite/index.js
-!jest.config.js
-*.d.ts
 node_modules
 
 # CDK asset staging directory
@@ -18,6 +14,7 @@ package-lock.json
 .dist/
 .build/
 .parcel-cache/
+.vite/
 
 # reference
 ref.*

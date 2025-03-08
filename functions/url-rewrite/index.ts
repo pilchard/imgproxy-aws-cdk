@@ -11,7 +11,7 @@ import crypto from "crypto";
 import cf from "cloudfront";
 
 import type { AWSCloudFront } from "cloudfront";
-import type { ImgproxyMetaOption, ImgproxyOption } from "./imgproxy-options.ts";
+import type { ImgproxyMetaOption, ImgproxyOption } from "./imgproxy-option-data.ts";
 import type { UrlRewrite } from "./url-rewrite.d.ts";
 import type { Option } from "./utility.d.ts";
 
@@ -19,137 +19,89 @@ import type { Option } from "./utility.d.ts";
  * D A T A
  */
 
-const indexedOptions: Record<string, ImgproxyOption> = {
-	resize: { full: "resize", short: "rs", meta: true, metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"] },
-	rs: { full: "resize", short: "rs", meta: true, metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"] },
-	size: { full: "size", short: "s", meta: true, metaOptions: ["width", "height", "enlarge", "extend"] },
-	s: { full: "size", short: "s", meta: true, metaOptions: ["width", "height", "enlarge", "extend"] },
-	resizing_type: { full: "resizing_type", short: "rt" },
-	rt: { full: "resizing_type", short: "rt" },
-	width: { full: "width", short: "w" },
-	w: { full: "width", short: "w" },
-	height: { full: "height", short: "h" },
-	h: { full: "height", short: "h" },
-	min_width: { full: "min_width", short: "mw" },
-	mw: { full: "min_width", short: "mw" },
-	min_height: { full: "min_height", short: "mh" },
-	mh: { full: "min_height", short: "mh" },
-	zoom: { full: "zoom", short: "z" },
-	z: { full: "zoom", short: "z" },
-	dpr: { full: "dpr", short: "dpr" },
-	enlarge: { full: "enlarge", short: "el" },
-	el: { full: "enlarge", short: "el" },
-	extend: { full: "extend", short: "ex" },
-	ex: { full: "extend", short: "ex" },
-	extend_aspect_ratio: { full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
-	exar: { full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
-	extend_ar: { full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
-	gravity: { full: "gravity", short: "g" },
-	g: { full: "gravity", short: "g" },
-	crop: { full: "crop", short: "c" },
-	c: { full: "crop", short: "c" },
-	trim: { full: "trim", short: "t" },
-	t: { full: "trim", short: "t" },
-	padding: { full: "padding", short: "pd" },
-	pd: { full: "padding", short: "pd" },
-	auto_rotate: { full: "auto_rotate", short: "ar" },
-	ar: { full: "auto_rotate", short: "ar" },
-	rotate: { full: "rotate", short: "rot" },
-	rot: { full: "rotate", short: "rot" },
-	background: { full: "background", short: "bg" },
-	bg: { full: "background", short: "bg" },
-	blur: { full: "blur", short: "bl" },
-	bl: { full: "blur", short: "bl" },
-	sharpen: { full: "sharpen", short: "sh" },
-	sh: { full: "sharpen", short: "sh" },
-	pixelate: { full: "pixelate", short: "pix" },
-	pix: { full: "pixelate", short: "pix" },
-	watermark: { full: "watermark", short: "wm" },
-	wm: { full: "watermark", short: "wm" },
-	strip_metadata: { full: "strip_metadata", short: "sm" },
-	sm: { full: "strip_metadata", short: "sm" },
-	keep_copyright: { full: "keep_copyright", short: "kcr" },
-	kcr: { full: "keep_copyright", short: "kcr" },
-	strip_color_profile: { full: "strip_color_profile", short: "scp" },
-	scp: { full: "strip_color_profile", short: "scp" },
-	enforce_thumbnail: { full: "enforce_thumbnail", short: "eth" },
-	eth: { full: "enforce_thumbnail", short: "eth" },
-	quality: { full: "quality", short: "q" },
-	q: { full: "quality", short: "q" },
-	format_quality: { full: "format_quality", short: "fq" },
-	fq: { full: "format_quality", short: "fq" },
-	max_bytes: { full: "max_bytes", short: "mb" },
-	mb: { full: "max_bytes", short: "mb" },
-	format: { full: "format", short: "f", alt: "ext" },
-	f: { full: "format", short: "f", alt: "ext" },
-	ext: { full: "format", short: "f", alt: "ext" },
-	skip_processing: { full: "skip_processing", short: "skp" },
-	skp: { full: "skip_processing", short: "skp" },
-	raw: { full: "raw", short: "raw" },
-	cache_buster: { full: "cache_buster", short: "cb" },
-	cb: { full: "cache_buster", short: "cb" },
-	expires: { full: "expires", short: "exp" },
-	exp: { full: "expires", short: "exp" },
-	filename: { full: "filename", short: "fn" },
-	fn: { full: "filename", short: "fn" },
-	return_attachment: { full: "return_attachment", short: "att" },
-	att: { full: "return_attachment", short: "att" },
-	preset: { full: "preset", short: "pr" },
-	pr: { full: "preset", short: "pr" },
-	max_src_resolution: { full: "max_src_resolution", short: "msr" },
-	msr: { full: "max_src_resolution", short: "msr" },
-	max_src_file_size: { full: "max_src_file_size", short: "msfs" },
-	msfs: { full: "max_src_file_size", short: "msfs" },
-	max_animation_frames: { full: "max_animation_frames", short: "maf" },
-	maf: { full: "max_animation_frames", short: "maf" },
-	max_animation_frame_resolution: { full: "max_animation_frame_resolution", short: "mafr" },
-	mafr: { full: "max_animation_frame_resolution", short: "mafr" },
-};
-
-const optionPriority = [
-	"rs",
-	"s",
-	"rt",
-	"w",
-	"h",
-	"mw",
-	"mh",
-	"z",
-	"dpr",
-	"el",
-	"ex",
-	"exar",
-	"g",
-	"c",
-	"t",
-	"pd",
-	"ar",
-	"rot",
-	"bg",
-	"bl",
-	"sh",
-	"pix",
-	"wm",
-	"sm",
-	"kcr",
-	"scp",
-	"eth",
-	"q",
-	"fq",
-	"mb",
-	"f",
-	"skp",
-	"raw",
-	"cb",
-	"exp",
-	"fn",
-	"att",
-	"pr",
-	"msr",
-	"msfs",
-	"maf",
-	"mafr",
+const imgproxyProcessingOptions: ImgproxyOption[] = [
+	{ full: "resize", short: "rs", meta: true, metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"] },
+	{ full: "size", short: "s", meta: true, metaOptions: ["width", "height", "enlarge", "extend"] },
+	{ full: "resizing_type", short: "rt" },
+	{ full: "resizing_algorithm", short: "ra", pro: true },
+	{ full: "width", short: "w" },
+	{ full: "height", short: "h" },
+	{ full: "min_width", short: "mw" },
+	{ full: "min_height", short: "mh" },
+	{ full: "zoom", short: "z" },
+	{ full: "dpr", short: "dpr" },
+	{ full: "enlarge", short: "el" },
+	{ full: "extend", short: "ex" },
+	{ full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
+	{ full: "gravity", short: "g" },
+	{ full: "objcts_position", short: "op", alt: "obj_pos", pro: true },
+	{ full: "crop", short: "c" },
+	{ full: "trim", short: "t" },
+	{ full: "padding", short: "pd" },
+	{ full: "auto_rotate", short: "ar" },
+	{ full: "rotate", short: "rot" },
+	{ full: "background", short: "bg" },
+	{ full: "background_alpha", short: "bga", pro: true },
+	{ full: "adjust", short: "a", pro: true, meta: true, metaOptions: ["brightness", "contrast", "saturation"] },
+	{ full: "brightness", short: "br", pro: true },
+	{ full: "contrast", short: "co", pro: true },
+	{ full: "saturation", short: "sa", pro: true },
+	{ full: "monochrome", short: "mc", pro: true },
+	{ full: "duotone", short: "dt", pro: true },
+	{ full: "blur", short: "bl" },
+	{ full: "sharpen", short: "sh" },
+	{ full: "pixelate", short: "pix" },
+	{ full: "unsharp_masking", short: "ush", pro: true },
+	{ full: "blur_detections", short: "bd", pro: true },
+	{ full: "draw_detections", short: "dd", pro: true },
+	{ full: "colorize", short: "col", pro: true },
+	{ full: "gradient", short: "gr", pro: true },
+	{ full: "watermark", short: "wm" },
+	{ full: "watermark_url", short: "wmu", pro: true },
+	{ full: "watermark_text", short: "wmt", pro: true },
+	{ full: "watermark_size", short: "wms", pro: true },
+	{ full: "watermark_rotate", short: "wmr", alt: "wm_rot", pro: true },
+	{ full: "watermark_shadow", short: "wmsh", pro: true },
+	{ full: "style", short: "st", pro: true },
+	{ full: "strip_metadata", short: "sm" },
+	{ full: "keep_copyright", short: "kcr" },
+	{ full: "dpi", short: "dpi", pro: true },
+	{ full: "strip_color_profile", short: "scp" },
+	{ full: "enforce_thumbnail", short: "eth" },
+	{ full: "quality", short: "q" },
+	{ full: "format_quality", short: "fq" },
+	{ full: "autoquality", short: "aq", pro: true },
+	{ full: "max_bytes", short: "mb" },
+	{ full: "jpeg_options", short: "jpgo", pro: true },
+	{ full: "png_options", short: "pngo", pro: true },
+	{ full: "webp_options", short: "webpo", pro: true },
+	{ full: "format", short: "f", alt: "ext" },
+	{ full: "page", short: "pg", pro: true },
+	{ full: "pages", short: "pgs", pro: true },
+	{ full: "disable_animation", short: "da", pro: true },
+	{ full: "video_thumbnail_second", short: "vts", pro: true },
+	{ full: "video_thumbnail_keyframes", short: "vtk", pro: true },
+	{ full: "video_thumbnail_tile", short: "vtt", pro: true },
+	{ full: "video_thumbnail_animation", short: "vta", pro: true },
+	{ full: "fallback_image_url", short: "fiu", pro: true },
+	{ full: "skip_processing", short: "skp" },
+	{ full: "raw", short: "raw" },
+	{ full: "cache_buster", short: "cb" },
+	{ full: "expires", short: "exp" },
+	{ full: "filename", short: "fn" },
+	{ full: "return_attachment", short: "att" },
+	{ full: "preset", short: "pr" },
+	{ full: "hashsum", short: "hs", pro: true },
+	{ full: "max_src_resolution", short: "msr" },
+	{ full: "max_src_file_size", short: "msfs" },
+	{ full: "max_animation_frames", short: "maf" },
+	{ full: "max_animation_frame_resolution", short: "mafr" },
 ];
+
+const getOption = (label: string) =>
+	imgproxyProcessingOptions.find((option) => option.full === label || option.short === label || option.alt === label);
+
+const optionPriority = imgproxyProcessingOptions.map((o) => o.short);
 
 function optionPriorityOrder(a: [string, string], b: [string, string]) {
 	return optionPriority.indexOf(a[0]) - optionPriority.indexOf(b[0]);
@@ -293,47 +245,51 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 	for (let i = optionStrings.length - 1; i >= 0; i--) {
 		const optionArr = optionStrings[i];
 
-		const option = indexedOptions[optionArr[0]];
+		// const option = indexedOptions[optionArr[0]];
+		const option = getOption(optionArr[0]);
 		const args = optionArr.slice(1);
-
-		// expand meta options
-		if ((option as ImgproxyMetaOption).meta !== undefined && (option as ImgproxyMetaOption).meta) {
-			const metaOptions = (option as ImgproxyMetaOption).metaOptions;
-			for (let j = 0; j < metaOptions.length; j++) {
-				const metaOption = indexedOptions[metaOptions[j]];
-				if (j < args.length) {
-					const metaOptionArgs = j === metaOptions.length - 1 ? args.slice(j) : [args[j]];
-					const metaOptKey = metaOption.short;
-					if (!{}.hasOwnProperty.call(seen, metaOptKey)) {
-						partition.push(optionTuple(metaOptKey, metaOptionArgs));
+		if (option !== undefined) {
+			// expand meta options
+			if ((option as ImgproxyMetaOption).meta !== undefined && (option as ImgproxyMetaOption).meta) {
+				const metaOptions = (option as ImgproxyMetaOption).metaOptions;
+				for (let j = 0; j < metaOptions.length; j++) {
+					// const metaOption = indexedOptions[metaOptions[j]];
+					const metaOption = getOption(metaOptions[j]);
+					if (metaOption !== undefined) {
+						if (j < args.length) {
+							const metaOptionArgs = j === metaOptions.length - 1 ? args.slice(j) : [args[j]];
+							const metaOptKey = metaOption.short;
+							if (!{}.hasOwnProperty.call(seen, metaOptKey)) {
+								partition.push(optionTuple(metaOptKey, metaOptionArgs));
+							}
+						}
 					}
 				}
-			}
-		} else {
-			const opt = option.short;
+			} else {
+				const opt = option.short;
 
-			// partition if preset
-			if (opt === "pr") {
-				if (partition.length) {
-					partitionedOptionStrings.push(stringify());
-					partition = [];
+				// partition if preset
+				if (opt === "pr") {
+					if (partition.length) {
+						partitionedOptionStrings.push(stringify());
+						partition = [];
+					}
+
+					// accumulate consecutive 'pr' options. ie. `pr:wide/pr:tall` -> `pr:wide:tall`
+					while (optionStrings[i - 1][0] === "pr" || optionStrings[i - 1][0] === "preset") {
+						args.push.apply(args, optionStrings[i - 1].slice(1));
+						i--;
+					}
+
+					// push preset
+					partitionedOptionStrings.push(optionTuple(opt, args)[1]);
+				} else if (!{}.hasOwnProperty.call(seen, opt)) {
+					// handle standard option
+					partition.push(optionTuple(opt, args));
+					seen[opt] = 1;
 				}
-
-				// accumulate consecutive 'pr' options. ie. `pr:wide/pr:tall` -> `pr:wide:tall`
-				while (optionStrings[i - 1][0] === "pr" || optionStrings[i - 1][0] === "preset") {
-					args.push.apply(args, optionStrings[i - 1].slice(1));
-					i--;
-				}
-
-				// push preset
-				partitionedOptionStrings.push(optionTuple(opt, args)[1]);
-			} else if (!{}.hasOwnProperty.call(seen, opt)) {
-				// handle standard option
-				partition.push(optionTuple(opt, args));
-				seen[opt] = 1;
 			}
 		}
-
 		// handle trailing partition
 		if (i === 0 && partition.length) {
 			partitionedOptionStrings.push(stringify());

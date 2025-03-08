@@ -1,4 +1,4 @@
-import { describe, expect, test } from "@jest/globals";
+import { describe, expect, test } from "vitest";
 import { handler } from "../index";
 
 import { event1 } from "../__mocks__/test-events";
@@ -8,14 +8,12 @@ describe("url-rewrite cloudfront function", () => {
 		const reqres = await handler(event1);
 
 		// should return request
-		expect("uri" in reqres).toBe(true);
+		expect(reqres).toHaveProperty("uri");
 
-		if ("uri" in reqres) {
-			// should accurately rewrite URI
-			expect(reqres.uri).toBe(
-				"/uCscSk36vAyo8Qd5ZGdtd9ZsKzjEPD1uXf0PpmCXiIg/rt:fill/h:100/el:0/pr:tall/pr:wide/w:30/g:ce/pr:cat/czM6Ly9pbWdwcm94eS1pbWFnZS1idWNrZXQvMjAyNDEyMTctRFNDXzA4MjlfY2xvc2UtY3JvcF9iLXcucG5n",
-			);
-		}
+		// should accurately rewrite URI
+		expect((<AWSCloudFrontFunction.Request> reqres).uri).toBe(
+			"/uCscSk36vAyo8Qd5ZGdtd9ZsKzjEPD1uXf0PpmCXiIg/rt:fill/h:100/el:0/pr:tall/pr:wide/w:30/g:ce/pr:cat/czM6Ly9pbWdwcm94eS1pbWFnZS1idWNrZXQvMjAyNDEyMTctRFNDXzA4MjlfY2xvc2UtY3JvcF9iLXcucG5n",
+		);
 	});
 
 	// +

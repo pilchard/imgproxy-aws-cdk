@@ -1,8 +1,4 @@
-import { createWriteStream, writeFileSync } from "node:fs";
-import { getConfig } from "../../lib/config";
-
-const config = getConfig();
-const { ENABLE_PRO_OPTIONS } = config;
+import { writeFileSync } from "node:fs";
 
 export type ImgproxyBaseOption = { full: string; short: string; alt?: string; pro?: boolean; pkl?: "full" | "short" | "alt"; };
 export type ImgproxyMetaOption = ImgproxyBaseOption & { meta: boolean; metaOptions: string[]; };
@@ -87,29 +83,29 @@ const imgproxyProcessingOptions: ImgproxyOption[] = [
 	{ full: "max_animation_frame_resolution", short: "mafr" },
 ];
 
-function indexAndWrite(arr: ImgproxyOption[], enableProOptions: boolean) {
-	const result = Object.create(null);
-	const preferredKeys: string[] = [];
-	for (const option of arr) {
-		if (!enableProOptions && option.pro) {
-			continue;
-		}
+export function writeOptionsToJson() {
+	const [indexedOptions, optionPriority] = indexOptions(imgproxyProcessingOptions);
+	writeFileSync("./functions/url-rewrite/imgproxy-indexed-options.json", JSON.stringify(indexedOptions), "utf8");
+	writeFileSync("./functions/url-rewrite/imgproxy-option-priority.json", JSON.stringify(optionPriority), "utf8");
+}
 
-		const keys = (["full", "short", "alt"] as const).map((k) => option[k]).filter((v) => v !== undefined);
-		const preferredKey = keys.reduce((r, k) => (k.length < r.length ? k : r));
-		console.log(preferredKey);
-		preferredKeys.push(preferredKey);
-
-		for (const key of ["full", "short", "alt"] as const) {
-			const indexKey = option[key];
+export function indexOptions(optionsArr: ImgproxyOption[]): [Record<string, ImgproxyOption>, string[]] {
+	const indexedOptions: Record<string, ImgproxyOption> = {};
+	const optionPriority: string[] = [];
+	// biome-ignore lint/complexity/noForEach: <explanation>
+	for (let i = 0; i < optionsArr.length; i++) {
+		const option = optionsArr[i];
+		optionPriority.push(option.short);
+		const labelKeys = ["full", "short", "alt"] as const;
+		for (let j = 0; j < labelKeys.length; j++) {
+			const indexKey = option[labelKeys[j]];
 			if (indexKey !== undefined) {
-				result[indexKey] = option;
+				indexedOptions[indexKey] = option;
 			}
 		}
 	}
 
-	writeFileSync("./functions/url-rewrite/imgproxy-indexed-options.json", JSON.stringify(result), "utf8");
-	writeFileSync("./functions/url-rewrite/imgproxy-option-priority.json", JSON.stringify(preferredKeys), "utf8");
+	return [indexedOptions, optionPriority];
 }
 
-indexAndWrite(imgproxyProcessingOptions, ENABLE_PRO_OPTIONS);
+export default indexOptions(imgproxyProcessingOptions);

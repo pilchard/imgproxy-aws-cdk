@@ -67,7 +67,7 @@
 		"importDeclaration.forceMultiLine": "never"
 	},
 	"javascript": {
-		"lineWidth": 140,
+		"lineWidth": 100,
 		"indentWidth": 4,
 		"useTabs": true,
 		"semiColons": "always",
