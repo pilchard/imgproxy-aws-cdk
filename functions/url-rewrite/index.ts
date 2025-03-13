@@ -10,7 +10,7 @@ import crypto from "crypto";
 
 import cf from "cloudfront";
 
-import type { AWSCloudFront } from "cloudfront";
+import type { CloudFrontKvsFormat, CloudFrontKvsFormatLabel, CloudFrontKvsHandle } from "@pilchard/aws-cloudfront-function";
 import type { ImgproxyMetaOption, ImgproxyOption } from "./imgproxy-option-data.ts";
 import type { UrlRewrite } from "./url-rewrite.d.ts";
 import type { Option } from "./utility.d.ts";
@@ -319,13 +319,13 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
  * K E Y  V A L U E  S T O R E
  */
 
-async function kvsGet<K extends AWSCloudFront.ValueFormatLabel>(
+async function kvsGet<K extends CloudFrontKvsFormatLabel>(
 	key: string,
-	handle: AWSCloudFront.Handle,
+	handle: CloudFrontKvsHandle,
 	format: K,
-): Promise<Option<AWSCloudFront.ValueFormat<K>, Error>> {
+): Promise<Option<CloudFrontKvsFormat[K], Error>> {
 	try {
-		return { some: await handle.get(`${key}`, { format: format }) };
+		return { some: await handle.get(key, { format: format }) };
 	} catch (err) {
 		return { none: new Error("Failed to retrieve value from key value store") };
 	}
