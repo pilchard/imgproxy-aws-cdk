@@ -1,8 +1,19 @@
 import { writeFileSync } from "node:fs";
 
-export type ImgproxyBaseOption = { full: string; short: string; alt?: string; pro?: boolean; pkl?: "full" | "short" | "alt"; };
-export type ImgproxyMetaOption = ImgproxyBaseOption & { meta: boolean; metaOptions: string[]; };
-export type ImgproxyOption = ImgproxyBaseOption | ImgproxyMetaOption;
+export interface ImgproxyStdOption {
+	full: string;
+	short: string;
+	alt?: string;
+	pro?: boolean;
+	pkl?: "full" | "short" | "alt";
+	bool?: boolean;
+	meta?: boolean;
+}
+export interface ImgproxyMetaOption extends ImgproxyStdOption {
+	meta: true;
+	metaOptions: string[];
+}
+export type ImgproxyOption = ImgproxyStdOption | ImgproxyMetaOption;
 
 const imgproxyProcessingOptions: ImgproxyOption[] = [
 	{ full: "resize", short: "rs", meta: true, metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"] },
@@ -15,15 +26,15 @@ const imgproxyProcessingOptions: ImgproxyOption[] = [
 	{ full: "min_height", short: "mh" },
 	{ full: "zoom", short: "z" },
 	{ full: "dpr", short: "dpr" },
-	{ full: "enlarge", short: "el" },
-	{ full: "extend", short: "ex" },
-	{ full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
+	{ full: "enlarge", short: "el", bool: true },
+	{ full: "extend", short: "ex", bool: true },
+	{ full: "extend_aspect_ratio", short: "exar", alt: "extend_ar", bool: true },
 	{ full: "gravity", short: "g" },
-	{ full: "objcts_position", short: "op", alt: "obj_pos", pro: true },
+	{ full: "objects_position", short: "op", alt: "obj_pos", pro: true },
 	{ full: "crop", short: "c" },
 	{ full: "trim", short: "t" },
 	{ full: "padding", short: "pd" },
-	{ full: "auto_rotate", short: "ar" },
+	{ full: "auto_rotate", short: "ar", bool: true },
 	{ full: "rotate", short: "rot" },
 	{ full: "background", short: "bg" },
 	{ full: "background_alpha", short: "bga", pro: true },
@@ -38,7 +49,7 @@ const imgproxyProcessingOptions: ImgproxyOption[] = [
 	{ full: "pixelate", short: "pix" },
 	{ full: "unsharp_masking", short: "ush", pro: true },
 	{ full: "blur_detections", short: "bd", pro: true },
-	{ full: "draw_detections", short: "dd", pro: true },
+	{ full: "draw_detections", short: "dd", pro: true, bool: true },
 	{ full: "colorize", short: "col", pro: true },
 	{ full: "gradient", short: "gr", pro: true },
 	{ full: "watermark", short: "wm" },
@@ -48,11 +59,11 @@ const imgproxyProcessingOptions: ImgproxyOption[] = [
 	{ full: "watermark_rotate", short: "wmr", alt: "wm_rot", pro: true },
 	{ full: "watermark_shadow", short: "wmsh", pro: true },
 	{ full: "style", short: "st", pro: true },
-	{ full: "strip_metadata", short: "sm" },
-	{ full: "keep_copyright", short: "kcr" },
+	{ full: "strip_metadata", short: "sm", bool: true },
+	{ full: "keep_copyright", short: "kcr", bool: true },
 	{ full: "dpi", short: "dpi", pro: true },
-	{ full: "strip_color_profile", short: "scp" },
-	{ full: "enforce_thumbnail", short: "eth" },
+	{ full: "strip_color_profile", short: "scp", bool: true },
+	{ full: "enforce_thumbnail", short: "eth", bool: true },
 	{ full: "quality", short: "q" },
 	{ full: "format_quality", short: "fq" },
 	{ full: "autoquality", short: "aq", pro: true },
@@ -63,18 +74,18 @@ const imgproxyProcessingOptions: ImgproxyOption[] = [
 	{ full: "format", short: "f", alt: "ext" },
 	{ full: "page", short: "pg", pro: true },
 	{ full: "pages", short: "pgs", pro: true },
-	{ full: "disable_animation", short: "da", pro: true },
+	{ full: "disable_animation", short: "da", pro: true, bool: true },
 	{ full: "video_thumbnail_second", short: "vts", pro: true },
 	{ full: "video_thumbnail_keyframes", short: "vtk", pro: true },
 	{ full: "video_thumbnail_tile", short: "vtt", pro: true },
 	{ full: "video_thumbnail_animation", short: "vta", pro: true },
 	{ full: "fallback_image_url", short: "fiu", pro: true },
 	{ full: "skip_processing", short: "skp" },
-	{ full: "raw", short: "raw" },
+	{ full: "raw", short: "raw", bool: true },
 	{ full: "cache_buster", short: "cb" },
 	{ full: "expires", short: "exp" },
 	{ full: "filename", short: "fn" },
-	{ full: "return_attachment", short: "att" },
+	{ full: "return_attachment", short: "att", bool: true },
 	{ full: "preset", short: "pr" },
 	{ full: "hashsum", short: "hs", pro: true },
 	{ full: "max_src_resolution", short: "msr" },

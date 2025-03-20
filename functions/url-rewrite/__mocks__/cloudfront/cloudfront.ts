@@ -6,19 +6,17 @@ import type {
 } from "@pilchard/aws-cloudfront-function";
 
 export const key_value_store: Map<string, string> = new Map();
-key_value_store.set(
-	"config",
-	JSON.stringify({
-		imgproxy_salt:
-			"68d22d598b4eeb920678441f1867273ddad173d7c0dcafbd94c3ef9084fd1b4b6ab51926ec55be7c661da7736ab30dca3093345f9e7486009c7b5bdfa2e9f65e",
-		imgproxy_key:
-			"fbe6ef0b67825685e696eac23a876f83a989dfbc7bfa6c8bd893fda6efecae04cab3ceb43f56cf4c450f723f8f9dbad1c0a5234bc023e6bcc78d799b39a4a717",
-		imgproxy_signature_size: 32,
-		imgproxy_trusted_signatures: [],
-		imgproxy_arguments_separator: ":",
-		log_level: "error",
-	}),
-);
+// key_value_store.set(
+// 	"config",
+// 	JSON.stringify({
+// 		imgproxy_salt: "simplesalt",
+// 		imgproxy_key: "simplekey",
+// 		imgproxy_signature_size: 32,
+// 		imgproxy_trusted_signatures: [],
+// 		imgproxy_arguments_separator: ":",
+// 		log_level: "error",
+// 	}),
+// );
 const cloudfront: Pick<CloudFrontRuntimeModule, "kvs"> = {
 	kvs() {
 		return {
