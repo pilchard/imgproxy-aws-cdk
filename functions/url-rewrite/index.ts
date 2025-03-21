@@ -260,13 +260,11 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 					partition[optionKey] = args;
 					break;
 				}
-
 				for (let i = 0; i < args.length; i++) {
 					if (current[i] === "" || current[i] === undefined) {
 						current[i] = args[i];
 					}
 				}
-
 				break;
 			}
 		}
