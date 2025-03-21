@@ -44,10 +44,10 @@ export class ImgproxyStack extends Stack {
 
 		const {
 			config: {
-				STACK_NAME,
+				// STACK_NAME,
 				// IMGPROXY
-				ENABLE_PRO_OPTIONS,
-				ENABLE_URL_SIGNING,
+				// ENABLE_PRO_OPTIONS,
+				// ENABLE_URL_SIGNING,
 				// LAMBDA
 				LAMBDA_FUNCTION_NAME,
 				LAMBDA_ECR_REPOSITORY_NAME,

@@ -163,7 +163,7 @@ export type ConfigProps = {
 	 * ARN of IAM Role that S3 client should assume. This allows you to provide imgproxy access to third-party S3 buckets that the assummed IAM Role has access to
 	 * @default undefined
 	 */
-	readonly S3_ASSUME_ROLE_ARN?: string;
+	readonly S3_ASSUME_ROLE_ARN?: string | undefined;
 	/**
 	 * Should imgproxy be able to access S3 buckets in other regions? By default, imgproxy can access only S3 buckets located in the same region as imgproxy
 	 * @default false

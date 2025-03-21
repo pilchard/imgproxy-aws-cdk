@@ -19,7 +19,5 @@ function restore_handler_declaration(contents, map) {
 		optContents = optContents.replace(`const ${handlerAlias} = async function handler`, `async function ${handlerAlias}`);
 	}
 
-	optContents = optContents.replace(/const .+\= async function handler\(event\) \{/i, "export async function handler(event) {");
-	console.log(optContents);
 	return [optContents, map];
 }

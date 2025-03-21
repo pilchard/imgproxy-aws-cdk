@@ -1,4 +1,4 @@
-import { parseArray, parseBoolean, parseNumber } from "./config";
+import { parseBoolean, parseNumber } from "./config";
 import { getOriginShieldRegion } from "./origin-shield";
 
 export type ImgproxyLambdaEnv = {
@@ -19,24 +19,14 @@ const baseName = "imgproxy";
 const stackNameDefault = `${baseName}-stack`;
 const lambdaFunctionNameDefault = `${stackNameDefault}_${baseName}-lamdba`;
 const lambdaEcrRepositoryNameDefault = baseName;
-const SYSTEMS_MANAGER_PARAMETERS_BASE_PATH =
-	process.env.SYSTEMS_MANAGER_PARAMETERS_PATH || process.env.STACK_NAME || stackNameDefault;
+/** @todo implement SSM Parameters */
+// const SYSTEMS_MANAGER_PARAMETERS_BASE_PATH = process.env.SYSTEMS_MANAGER_PARAMETERS_PATH || process.env.STACK_NAME || stackNameDefault;
 
 export const config = {
 	// STACK
-	cdk: {
-		stackName: "imgproxy",
-		account: "",
-		region: "",
-	},
+	cdk: { stackName: "imgproxy", account: "", region: "" },
 	// IMGPROXY
-	imgproxy: {
-		proOptions: false,
-		urlSigning: true,
-		environment: {
-			file: ".imgproxy.env",
-		},
-	},
+	imgproxy: { proOptions: false, urlSigning: true, environment: { file: ".imgproxy.env" } },
 
 	// LAMBDA
 	lambda: {
@@ -47,8 +37,7 @@ export const config = {
 		timeout: parseNumber(process.env.IMGPROXY_TIMEOUT, 60),
 	},
 	// SSM
-	SYSTEMS_MANAGER_PARAMETERS_BASE_PATH:
-		process.env.SYSTEMS_MANAGER_PARAMETERS_PATH || process.env.STACK_NAME || stackNameDefault,
+	SYSTEMS_MANAGER_PARAMETERS_BASE_PATH: process.env.SYSTEMS_MANAGER_PARAMETERS_PATH || process.env.STACK_NAME || stackNameDefault,
 	// S3
 	s3: {
 		createDefaultBuckets: true,
@@ -62,13 +51,9 @@ export const config = {
 	cloudfront: {
 		createCloudFrontDistribution: true,
 		enableCloudFrontFunctionUrlRewrite: true,
-		originShieldRegion: getOriginShieldRegion(
-			process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1",
-		),
+		originShieldRegion: getOriginShieldRegion(process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1"),
 		corsEnabled: parseBoolean(process.env.CLOUDFRONT_CORS_ENABLED) ?? true,
 	},
 	// SAMPLE
-	sample: {
-		ampleWebsite: false,
-	},
+	sample: { ampleWebsite: false },
 };

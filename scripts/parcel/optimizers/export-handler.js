@@ -15,8 +15,6 @@ function restore_handler(contents, map) {
 
 	const [exportDeclaration, handlerAlias] = exportRegexp.exec(optContents) ?? [];
 
-	console.log({ exportDeclaration, handlerAlias });
-
 	if (exportDeclaration !== undefined && handlerAlias !== undefined) {
 		optContents = optContents.replace(exportDeclaration, "");
 		optContents = optContents.replace(`function ${handlerAlias}`, "function handler");
