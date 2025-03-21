@@ -15,15 +15,18 @@ import type { ImgproxyMetaOption, ImgproxyOption } from "./imgproxy-option-data.
 import type { UrlRewrite } from "./url-rewrite.d.ts";
 import type { Option } from "./utility.d.ts";
 
+export type MergeAction = "overwrite" | "concat" | "merge";
+export type MergeOptions = { action: MergeAction; gravityOffset?: number; };
+
+export type OptionPartition = Record<string, string[]>;
 /**
  * D A T A
  */
 
 const imgproxyProcessingOptions: ImgproxyOption[] = [
-	{ full: "resize", short: "rs", meta: true, metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"] },
-	{ full: "size", short: "s", meta: true, metaOptions: ["width", "height", "enlarge", "extend"] },
+	{ full: "resize", short: "rs", metaOptions: ["resizing_type", "width", "height", "enlarge", "extend"] },
+	{ full: "size", short: "s", metaOptions: ["width", "height", "enlarge", "extend"] },
 	{ full: "resizing_type", short: "rt" },
-	{ full: "resizing_algorithm", short: "ra", pro: true },
 	{ full: "width", short: "w" },
 	{ full: "height", short: "h" },
 	{ full: "min_width", short: "mw" },
@@ -31,67 +34,34 @@ const imgproxyProcessingOptions: ImgproxyOption[] = [
 	{ full: "zoom", short: "z" },
 	{ full: "dpr", short: "dpr" },
 	{ full: "enlarge", short: "el" },
-	{ full: "extend", short: "ex" },
-	{ full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
-	{ full: "gravity", short: "g" },
-	{ full: "objcts_position", short: "op", alt: "obj_pos", pro: true },
-	{ full: "crop", short: "c" },
-	{ full: "trim", short: "t" },
-	{ full: "padding", short: "pd" },
+	{ full: "extend", short: "ex", merge: { action: "merge", gravityOffset: 1 } },
+	{ full: "extend_aspect_ratio", short: "exar", alt: "extend_ar", merge: { action: "merge", gravityOffset: 1 } },
+	{ full: "gravity", short: "g", merge: { action: "merge", gravityOffset: 0 } },
+	{ full: "crop", short: "c", merge: { action: "merge", gravityOffset: 2 } },
+	{ full: "trim", short: "t", merge: "merge" },
+	{ full: "padding", short: "pd", merge: "merge" },
 	{ full: "auto_rotate", short: "ar" },
 	{ full: "rotate", short: "rot" },
 	{ full: "background", short: "bg" },
-	{ full: "background_alpha", short: "bga", pro: true },
-	{ full: "adjust", short: "a", pro: true, meta: true, metaOptions: ["brightness", "contrast", "saturation"] },
-	{ full: "brightness", short: "br", pro: true },
-	{ full: "contrast", short: "co", pro: true },
-	{ full: "saturation", short: "sa", pro: true },
-	{ full: "monochrome", short: "mc", pro: true },
-	{ full: "duotone", short: "dt", pro: true },
 	{ full: "blur", short: "bl" },
 	{ full: "sharpen", short: "sh" },
 	{ full: "pixelate", short: "pix" },
-	{ full: "unsharp_masking", short: "ush", pro: true },
-	{ full: "blur_detections", short: "bd", pro: true },
-	{ full: "draw_detections", short: "dd", pro: true },
-	{ full: "colorize", short: "col", pro: true },
-	{ full: "gradient", short: "gr", pro: true },
-	{ full: "watermark", short: "wm" },
-	{ full: "watermark_url", short: "wmu", pro: true },
-	{ full: "watermark_text", short: "wmt", pro: true },
-	{ full: "watermark_size", short: "wms", pro: true },
-	{ full: "watermark_rotate", short: "wmr", alt: "wm_rot", pro: true },
-	{ full: "watermark_shadow", short: "wmsh", pro: true },
-	{ full: "style", short: "st", pro: true },
+	{ full: "watermark", short: "wm", merge: "merge" },
 	{ full: "strip_metadata", short: "sm" },
 	{ full: "keep_copyright", short: "kcr" },
-	{ full: "dpi", short: "dpi", pro: true },
 	{ full: "strip_color_profile", short: "scp" },
 	{ full: "enforce_thumbnail", short: "eth" },
 	{ full: "quality", short: "q" },
-	{ full: "format_quality", short: "fq" },
-	{ full: "autoquality", short: "aq", pro: true },
+	{ full: "format_quality", short: "fq", merge: "concat" },
 	{ full: "max_bytes", short: "mb" },
-	{ full: "jpeg_options", short: "jpgo", pro: true },
-	{ full: "png_options", short: "pngo", pro: true },
-	{ full: "webp_options", short: "webpo", pro: true },
 	{ full: "format", short: "f", alt: "ext" },
-	{ full: "page", short: "pg", pro: true },
-	{ full: "pages", short: "pgs", pro: true },
-	{ full: "disable_animation", short: "da", pro: true },
-	{ full: "video_thumbnail_second", short: "vts", pro: true },
-	{ full: "video_thumbnail_keyframes", short: "vtk", pro: true },
-	{ full: "video_thumbnail_tile", short: "vtt", pro: true },
-	{ full: "video_thumbnail_animation", short: "vta", pro: true },
-	{ full: "fallback_image_url", short: "fiu", pro: true },
-	{ full: "skip_processing", short: "skp" },
+	{ full: "skip_processing", short: "skp", merge: "concat" },
 	{ full: "raw", short: "raw" },
 	{ full: "cache_buster", short: "cb" },
 	{ full: "expires", short: "exp" },
 	{ full: "filename", short: "fn" },
 	{ full: "return_attachment", short: "att" },
 	{ full: "preset", short: "pr" },
-	{ full: "hashsum", short: "hs", pro: true },
 	{ full: "max_src_resolution", short: "msr" },
 	{ full: "max_src_file_size", short: "msfs" },
 	{ full: "max_animation_frames", short: "maf" },
@@ -103,7 +73,7 @@ const getOption = (label: string) =>
 
 const optionPriority = imgproxyProcessingOptions.map((o) => o.short);
 
-function optionPriorityOrder(a: [string, string], b: [string, string]) {
+function optionPriorityOrder(a: [string, string[]], b: [string, string[]]) {
 	return optionPriority.indexOf(a[0]) - optionPriority.indexOf(b[0]);
 }
 
@@ -137,8 +107,8 @@ const PATH_SEP = "/";
  * H A N D L E R
  */
 
-export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCloudFrontFunction.Request | AWSCloudFrontFunction.Response> {
-	// logLine(`In handler with event: ${JSON.stringify(event)}`, "debug");
+export const handler: AWSCloudFrontFunction.RequestEventHandler = async function handler(event) {
+	logLine(`In handler with event: ${JSON.stringify(event)}`, "debug");
 
 	const kvsResponse = await kvsGet("config", kvsHandle, "json");
 
@@ -149,7 +119,7 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 	logLine("Config fetched from kvs", "info");
 
 	const config = Object.assign(defaultConfig, kvsResponse.some as UrlRewrite.Config);
-
+	logLine(`Fetched config: ${JSON.stringify(config)}`, "debug");
 	// update globals
 	LOG_LEVEL = resolveLogLevel(config.log_level);
 	ARGS_SEP = config.imgproxy_arguments_separator;
@@ -179,10 +149,10 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 	const request = event.request;
 	const requestUri = request.uri;
 
-	// logLine(`Source: ${request.headers.host.value}${request.uri}`, "debug");
-	// logLine("parsing uri", "info");
+	logLine(`Source: ${request.headers.host.value}${request.uri}`, "debug");
+	logLine("parsing uri", "info");
 
-	const imgproxyUriRegexp = new RegExp(`^\\/([^\\/]+)\\/((?:[a-z]+\\${ARGS_SEP}[^\\/]+\\/)+)?(plain\\/|enc\\/)?(.+)`, "g");
+	const imgproxyUriRegexp = new RegExp(`^\\/([^\\/]+)\\/((?:[a-zA-Z_]+\\${ARGS_SEP}[^\\/]+\\/)+)?(plain\\/|enc\\/)?(.+)`, "g");
 
 	const uriRegexpResult = imgproxyUriRegexp.exec(requestUri);
 
@@ -205,7 +175,7 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 	}
 
 	logLine("uri parsing successful", "info");
-	// logLine(`uri parsing result: ${JSON.stringify(uriRegexpResult)}`, "debug");
+	logLine(`uri parsing result: ${JSON.stringify(uriRegexpResult)}`, "debug");
 
 	const signature = uriRegexpResult[1];
 	const processingOptionsString = uriRegexpResult[2] ?? "";
@@ -239,60 +209,106 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 
 	const partitionedOptionStrings: string[] = [];
 	const seen: Record<string, number> = {};
-	let partition: [string, string][] = [];
-	const stringify = () => partition.sort(optionPriorityOrder).map((e) => e[1]).join(PATH_SEP);
-	const optionTuple = (opt: string, args: string[]): [string, string] => [opt, opt + ARGS_SEP + args.join(ARGS_SEP)];
-	for (let i = optionStrings.length - 1; i >= 0; i--) {
-		const optionArr = optionStrings[i];
+	let partition: OptionPartition = {};
+	const cumulativeOptions: OptionPartition = {};
+	const normalizeArgs = (args: string[]) =>
+		args.map((a) => (a === "t" || a === "true") ? "1" : (a === "f" || a === "false") ? "0" : a.toLowerCase());
+	const partitionStringify = (partition: OptionPartition) =>
+		Object.entries(partition).sort(optionPriorityOrder).map((e) => {
+			const str = e[0] + ARGS_SEP + normalizeArgs(e[1]).join(ARGS_SEP);
+			console.log(str);
+			return str;
+		}).join(PATH_SEP);
 
-		// const option = indexedOptions[optionArr[0]];
-		const option = getOption(optionArr[0]);
-		const args = optionArr.slice(1);
+	const cyclePartition = () => {
+		if (Object.entries(partition).length) {
+			partitionedOptionStrings.push(partitionStringify(partition));
+			partition = {};
+		}
+	};
+	const partitionInsert = (option: ImgproxyOption, args: string[]) => {
+		const optionKey = option.short;
+
+		const mergeOptions: MergeOptions = option.merge === undefined
+			? { action: "overwrite" }
+			: (typeof option.merge === "string")
+			? { action: option.merge }
+			: option.merge;
+		const action = mergeOptions.action;
+		const gravityOffset = mergeOptions.gravityOffset;
+
+		switch (action) {
+			case "overwrite": {
+				if (!{}.hasOwnProperty.call(seen, optionKey)) {
+					partition[optionKey] = args;
+					seen[optionKey] = 1;
+				}
+				break;
+			}
+			case "concat": {
+				console.log(cumulativeOptions);
+				cumulativeOptions[optionKey] = (cumulativeOptions[optionKey] || []).concat(args);
+				break;
+			}
+			case "merge": {
+				const current = partition[optionKey];
+				if (
+					current === undefined
+					|| args.length === current.length
+					|| (gravityOffset !== undefined && (args[gravityOffset] === "sm" || args[gravityOffset] === "fp"))
+				) {
+					partition[optionKey] = args;
+					break;
+				}
+
+				for (let i = 0; i < args.length; i++) {
+					if (current[i] === "" || current[i] === undefined) {
+						current[i] = args[i];
+					}
+				}
+
+				break;
+			}
+		}
+	};
+
+	for (let i = optionStrings.length - 1; i >= 0; i--) {
+		console.log(partition);
+		const optionArr = optionStrings[i];
+		const option = getOption(optionArr[0].toLowerCase());
 		if (option !== undefined) {
-			// expand meta options
-			if ((option as ImgproxyMetaOption).meta !== undefined && (option as ImgproxyMetaOption).meta) {
-				const metaOptions = (option as ImgproxyMetaOption).metaOptions;
+			const args = optionArr.slice(1);
+			if ((<ImgproxyMetaOption> option).metaOptions !== undefined) {
+				const metaOptions = (<ImgproxyMetaOption> option).metaOptions;
 				for (let j = 0; j < metaOptions.length; j++) {
-					// const metaOption = indexedOptions[metaOptions[j]];
 					const metaOption = getOption(metaOptions[j]);
 					if (metaOption !== undefined) {
 						if (j < args.length) {
 							const metaOptionArgs = j === metaOptions.length - 1 ? args.slice(j) : [args[j]];
-							const metaOptKey = metaOption.short;
-							if (!{}.hasOwnProperty.call(seen, metaOptKey)) {
-								partition.push(optionTuple(metaOptKey, metaOptionArgs));
-							}
+							partitionInsert(metaOption, metaOptionArgs);
 						}
 					}
 				}
 			} else {
-				const opt = option.short;
+				if (option.short === "pr") {
+					console.log("pr");
+					cyclePartition();
 
-				// partition if preset
-				if (opt === "pr") {
-					if (partition.length) {
-						partitionedOptionStrings.push(stringify());
-						partition = [];
-					}
-
-					// accumulate consecutive 'pr' options. ie. `pr:wide/pr:tall` -> `pr:wide:tall`
 					while (optionStrings[i - 1][0] === "pr" || optionStrings[i - 1][0] === "preset") {
 						args.push.apply(args, optionStrings[i - 1].slice(1));
 						i--;
 					}
-
-					// push preset
-					partitionedOptionStrings.push(optionTuple(opt, args)[1]);
-				} else if (!{}.hasOwnProperty.call(seen, opt)) {
-					// handle standard option
-					partition.push(optionTuple(opt, args));
-					seen[opt] = 1;
+					partitionedOptionStrings.push(option.short + ARGS_SEP + args.join(ARGS_SEP));
+				} else {
+					partitionInsert(option, args);
 				}
 			}
 		}
-		// handle trailing partition
-		if (i === 0 && partition.length) {
-			partitionedOptionStrings.push(stringify());
+		if (i === 0) {
+			cyclePartition();
+			if (Object.entries(cumulativeOptions).length) {
+				partitionedOptionStrings.push(partitionStringify(cumulativeOptions));
+			}
 		}
 	}
 
@@ -302,7 +318,8 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 	logLine(`normalized_option_string: ${normalizedOptionsString}`, "debug");
 
 	const newImgproxyPath = `/${normalizedOptionsString}/${sourceUrlType}${sourceUrl}`;
-	const resultUri = `/${_sign(IMGPROXY_SALT, newImgproxyPath, IMGPROXY_KEY, IMGPROXY_SIGNATURE_SIZE)}${newImgproxyPath}`;
+	const newSignature = signingEnabled ? _sign(IMGPROXY_SALT, newImgproxyPath, IMGPROXY_KEY, IMGPROXY_SIGNATURE_SIZE) : signature;
+	const resultUri = `/${newSignature}${newImgproxyPath}`;
 	request.uri = resultUri;
 
 	/**
@@ -313,7 +330,7 @@ export async function handler(event: AWSCloudFrontFunction.Event): Promise<AWSCl
 	// }
 
 	return request;
-}
+};
 
 /**
  * K E Y  V A L U E  S T O R E
@@ -410,5 +427,12 @@ function logLine(logline: any, level: UrlRewrite.LogLevel) {
 function sendError(statusCode: number, statusText: string, body: string, error: Error) {
 	logLine(body, "error");
 	logLine(error, "error");
-	return { statusCode, statusText, body } as AWSCloudFrontFunction.Response;
+	const resonse: AWSCloudFrontFunction.FunctionEventResponse = {
+		statusCode: statusCode,
+		statusDescription: statusText,
+		body: body,
+		headers: {},
+		cookies: {},
+	};
+	return resonse;
 }

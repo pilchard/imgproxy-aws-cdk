@@ -224,33 +224,6 @@ const metaOptionRawData: [string[], string[]][] = [
 	[["s:100:200:true:true:noea:1:2"], ["w:100", "h:200", "el:1", "ex:1:noea:1:2"]],
 	[["s:100:200:f:f:ce"], ["w:100", "h:200", "el:0", "ex:0:ce"]],
 	[["s:100:200:t:t:we:1:0.2"], ["w:100", "h:200", "el:1", "ex:1:we:1:0.2"]],
-	/**
-	 * Adjust (meta-option) [pro]
-	 * adjust:%brightness:%contrast:%saturation
-	 * a:%brightness:%contrast:%saturation
-	 *
-	 * Brightness - an integer number ranging from `-255` to `255`.
-	 * brightness:%brightness
-	 * br:%brightness
-	 *
-	 * Contrast - a positive floating point number, where a value of `1` leaves the contrast unchanged.
-	 * contrast:%contrast
-	 * co:%contrast
-	 *
-	 * Saturation - a positive floating-point number, where a value of `1` leaves the saturation unchanged.
-	 * saturation:%saturation
-	 * sa:%saturation
-	 */
-	// `adjust`
-	[["adjust:-100:0.2:1"], ["br:-100", "co:0.2", "sa:1"]],
-	[["adjust:100:0.2:0.5"], ["br:100", "co:0.2", "sa:0.5"]],
-	[["adjust:100:0.2"], ["br:100", "co:0.2"]],
-	[["adjust:100"], ["br:100"]],
-	// `a`
-	[["a:-100:0.2:1"], ["br:-100", "co:0.2", "sa:1"]],
-	[["a:100:0.2:0.5"], ["br:100", "co:0.2", "sa:0.5"]],
-	[["a:100:0.2"], ["br:100", "co:0.2"]],
-	[["a:100"], ["br:100"]],
 ];
 
 const stdOptionRawData: [string[], string[]][] = [
@@ -279,23 +252,6 @@ const stdOptionRawData: [string[], string[]][] = [
 	[["rt:fill-down"], ["rt:fill-down"]],
 	[["rt:force"], ["rt:force"]],
 	[["rt:auto"], ["rt:auto"]],
-	/**
-	 * Resizing algorithm [pro]
-	 * resizing_algorithm:%algorithm
-	 * ra:%algorithm
-	 * Defines the algorithm that imgproxy will use for resizing. Supported algorithms are `nearest`, `linear`, `cubic`, `lanczos2`, and `lanczos3`.
-	 * @default: lanczos3
-	 */
-	[["resizing_algorithm:nearest"], ["ra:nearest"]],
-	[["resizing_algorithm:linear"], ["ra:linear"]],
-	[["resizing_algorithm:cubic"], ["ra:cubic"]],
-	[["resizing_algorithm:lanczos2"], ["ra:lanczos2"]],
-	[["resizing_algorithm:lanczos3"], ["ra:lanczos3"]],
-	[["ra:nearest"], ["ra:nearest"]],
-	[["ra:linear"], ["ra:linear"]],
-	[["ra:cubic"], ["ra:cubic"]],
-	[["ra:lanczos2"], ["ra:lanczos2"]],
-	[["ra:lanczos3"], ["ra:lanczos3"]],
 	/**
 	 * Width
 	 * width:%width
@@ -392,9 +348,6 @@ const stdOptionRawData: [string[], string[]][] = [
 	[["el:f"], ["el:0"]],
 	[["enlarge:false"], ["el:0"]],
 	[["el:false"], ["el:0"]],
-	// random string value == falsey
-	[["enlarge:nope"], ["el:0"]],
-	[["el:nope"], ["el:0"]],
 	// true - valid truthy values: `1`, `t` or `true`
 	[["enlarge:1"], ["el:1"]],
 	[["el:1"], ["el:1"]],
@@ -595,167 +548,6 @@ const stdOptionRawData: [string[], string[]][] = [
 
 	[["gravity:fp:0.98:0.12"], ["g:fp:0.98:0.12"]],
 	[["g:fp:0.98:0.12"], ["g:fp:0.98:0.12"]],
-	/**
-	 * Objects position [pro]
-	 * objects_position:%type:%x_offset:%y_offset
-	 * obj_pos:%type:%x_offset:%y_offset
-	 * op:%type:%x_offset:%y_offset
-	 *
-	 * When imgproxy needs to cut some parts of the image, and the obj/objw gravity is used, the
-	 * objects_position option allows you to adjust the position of the detected objects on the
-	 * resulting image.
-	 *
-	 * type - specifies the position type. Available values:
-	 * - no: north (top edge)
-	 * - so: south (bottom edge)
-	 * - ea: east (right edge)
-	 * - we: west (left edge)
-	 * - noea: north-east (top-right corner)
-	 * - nowe: north-west (top-left corner)
-	 * - soea: south-east (bottom-right corner)
-	 * - sowe: south-west (bottom-left corner)
-	 * - ce: center
-	 *
-	 * x_offset, y_offset - (optional) specifies the position offset along the X and Y axes.
-	 *
-	 * @default: ce:0:0
-	 */
-	[["objects_position:no"], ["op:no"]],
-	[["objects_position:so"], ["op:so"]],
-	[["objects_position:ea"], ["op:ea"]],
-	[["objects_position:we"], ["op:we"]],
-	[["objects_position:noea"], ["op:noea"]],
-	[["objects_position:nowe"], ["op:nowe"]],
-	[["objects_position:soea"], ["op:soea"]],
-	[["objects_position:sowe"], ["op:sowe"]],
-	[["objects_position:ce"], ["op:ce"]],
-
-	[["objects_position:no:1"], ["op:no:1"]],
-	[["objects_position:so:1"], ["op:so:1"]],
-	[["objects_position:ea:1"], ["op:ea:1"]],
-	[["objects_position:we:1"], ["op:we:1"]],
-	[["objects_position:noea:1"], ["op:noea:1"]],
-	[["objects_position:nowe:1"], ["op:nowe:1"]],
-	[["objects_position:soea:1"], ["op:soea:1"]],
-	[["objects_position:sowe:1"], ["op:sowe:1"]],
-	[["objects_position:ce:1"], ["op:ce:1"]],
-
-	[["objects_position:no:1:2"], ["op:no:1:2"]],
-	[["objects_position:so:1:2"], ["op:so:1:2"]],
-	[["objects_position:ea:1:2"], ["op:ea:1:2"]],
-	[["objects_position:we:1:2"], ["op:we:1:2"]],
-	[["objects_position:noea:1:2"], ["op:noea:1:2"]],
-	[["objects_position:nowe:1:2"], ["op:nowe:1:2"]],
-	[["objects_position:soea:1:2"], ["op:soea:1:2"]],
-	[["objects_position:sowe:1:2"], ["op:sowe:1:2"]],
-	[["objects_position:ce:1:2"], ["op:ce:1:2"]],
-
-	[["objects_position:no:0.98:0.12"], ["op:no:0.98:0.12"]],
-	[["objects_position:so:0.98:0.12"], ["op:so:0.98:0.12"]],
-	[["objects_position:ea:0.98:0.12"], ["op:ea:0.98:0.12"]],
-	[["objects_position:we:0.98:0.12"], ["op:we:0.98:0.12"]],
-	[["objects_position:noea:0.98:0.12"], ["op:noea:0.98:0.12"]],
-	[["objects_position:nowe:0.98:0.12"], ["op:nowe:0.98:0.12"]],
-	[["objects_position:soea:0.98:0.12"], ["op:soea:0.98:0.12"]],
-	[["objects_position:sowe:0.98:0.12"], ["op:sowe:0.98:0.12"]],
-	[["objects_position:ce:0.98:0.12"], ["op:ce:0.98:0.12"]],
-
-	[["obj_pos:no"], ["op:no"]],
-	[["obj_pos:so"], ["op:so"]],
-	[["obj_pos:ea"], ["op:ea"]],
-	[["obj_pos:we"], ["op:we"]],
-	[["obj_pos:noea"], ["op:noea"]],
-	[["obj_pos:nowe"], ["op:nowe"]],
-	[["obj_pos:soea"], ["op:soea"]],
-	[["obj_pos:sowe"], ["op:sowe"]],
-	[["obj_pos:ce"], ["op:ce"]],
-
-	[["obj_pos:no:1"], ["op:no:1"]],
-	[["obj_pos:so:1"], ["op:so:1"]],
-	[["obj_pos:ea:1"], ["op:ea:1"]],
-	[["obj_pos:we:1"], ["op:we:1"]],
-	[["obj_pos:noea:1"], ["op:noea:1"]],
-	[["obj_pos:nowe:1"], ["op:nowe:1"]],
-	[["obj_pos:soea:1"], ["op:soea:1"]],
-	[["obj_pos:sowe:1"], ["op:sowe:1"]],
-	[["obj_pos:ce:1"], ["op:ce:1"]],
-
-	[["obj_pos:no:1:2"], ["op:no:1:2"]],
-	[["obj_pos:so:1:2"], ["op:so:1:2"]],
-	[["obj_pos:ea:1:2"], ["op:ea:1:2"]],
-	[["obj_pos:we:1:2"], ["op:we:1:2"]],
-	[["obj_pos:noea:1:2"], ["op:noea:1:2"]],
-	[["obj_pos:nowe:1:2"], ["op:nowe:1:2"]],
-	[["obj_pos:soea:1:2"], ["op:soea:1:2"]],
-	[["obj_pos:sowe:1:2"], ["op:sowe:1:2"]],
-	[["obj_pos:ce:1:2"], ["op:ce:1:2"]],
-
-	[["obj_pos:no:0.98:0.12"], ["op:no:0.98:0.12"]],
-	[["obj_pos:so:0.98:0.12"], ["op:so:0.98:0.12"]],
-	[["obj_pos:ea:0.98:0.12"], ["op:ea:0.98:0.12"]],
-	[["obj_pos:we:0.98:0.12"], ["op:we:0.98:0.12"]],
-	[["obj_pos:noea:0.98:0.12"], ["op:noea:0.98:0.12"]],
-	[["obj_pos:nowe:0.98:0.12"], ["op:nowe:0.98:0.12"]],
-	[["obj_pos:soea:0.98:0.12"], ["op:soea:0.98:0.12"]],
-	[["obj_pos:sowe:0.98:0.12"], ["op:sowe:0.98:0.12"]],
-	[["obj_pos:ce:0.98:0.12"], ["op:ce:0.98:0.12"]],
-
-	[["op:no"], ["op:no"]],
-	[["op:so"], ["op:so"]],
-	[["op:ea"], ["op:ea"]],
-	[["op:we"], ["op:we"]],
-	[["op:noea"], ["op:noea"]],
-	[["op:nowe"], ["op:nowe"]],
-	[["op:soea"], ["op:soea"]],
-	[["op:sowe"], ["op:sowe"]],
-	[["op:ce"], ["op:ce"]],
-
-	[["op:no:1"], ["op:no:1"]],
-	[["op:so:1"], ["op:so:1"]],
-	[["op:ea:1"], ["op:ea:1"]],
-	[["op:we:1"], ["op:we:1"]],
-	[["op:noea:1"], ["op:noea:1"]],
-	[["op:nowe:1"], ["op:nowe:1"]],
-	[["op:soea:1"], ["op:soea:1"]],
-	[["op:sowe:1"], ["op:sowe:1"]],
-	[["op:ce:1"], ["op:ce:1"]],
-
-	[["op:no:1:2"], ["op:no:1:2"]],
-	[["op:so:1:2"], ["op:so:1:2"]],
-	[["op:ea:1:2"], ["op:ea:1:2"]],
-	[["op:we:1:2"], ["op:we:1:2"]],
-	[["op:noea:1:2"], ["op:noea:1:2"]],
-	[["op:nowe:1:2"], ["op:nowe:1:2"]],
-	[["op:soea:1:2"], ["op:soea:1:2"]],
-	[["op:sowe:1:2"], ["op:sowe:1:2"]],
-	[["op:ce:1:2"], ["op:ce:1:2"]],
-
-	[["op:no:0.98:0.12"], ["op:no:0.98:0.12"]],
-	[["op:so:0.98:0.12"], ["op:so:0.98:0.12"]],
-	[["op:ea:0.98:0.12"], ["op:ea:0.98:0.12"]],
-	[["op:we:0.98:0.12"], ["op:we:0.98:0.12"]],
-	[["op:noea:0.98:0.12"], ["op:noea:0.98:0.12"]],
-	[["op:nowe:0.98:0.12"], ["op:nowe:0.98:0.12"]],
-	[["op:soea:0.98:0.12"], ["op:soea:0.98:0.12"]],
-	[["op:sowe:0.98:0.12"], ["op:sowe:0.98:0.12"]],
-	[["op:ce:0.98:0.12"], ["op:ce:0.98:0.12"]],
-	/**
-	 * Special positions:
-	 *
-	 * - objects_position:fp:%x:%y: the focus point position. x and y are floating point numbers
-	 *      between 0 and 1 that define the coordinates of the center of the objects' area in the
-	 *      resulting image. Treat 0 and 1 as right/left for x and top/bottom for y.
-	 * - objects_position:prop: the proportional position. imgproxy will try to set object offsets
-	 *      in the resulting image proportional to their offsets in the original image. This
-	 *      position type allows the picture scene to be maintained after cropping.
-	 */
-	[["objects_position:fp:0.98:0.12"], ["op:fp:0.98:0.12"]],
-	[["obj_pos:fp:0.98:0.12"], ["op:fp:0.98:0.12"]], // alt
-	[["op:fp:0.98:0.12"], ["op:fp:0.98:0.12"]],
-
-	[["objects_position:prop"], ["op:prop"]],
-	[["obj_pos:prop"], ["op:prop"]], // alt
-	[["op:prop"], ["op:prop"]],
 	/**
 	 * Crop
 	 * crop:%width:%height:%gravity
