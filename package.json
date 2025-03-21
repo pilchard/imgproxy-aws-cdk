@@ -28,10 +28,8 @@
 		"cdk": "cdk",
 		"typecheck": "tsc --noEmit",
 		"init-json": "rm -rf functions/url-rewrite/imgproxy-indexed-options.json functions/url-rewrite/imgproxy-option-priority.json && tsx ./functions/url-rewrite/imgproxy-options.ts",
-		"build": "pnpm run init-json && pnpm run typecheck && rm -rf ./.build && pnpm run build:parcel",
-		"build:swc": "swc ./functions/url-rewrite/index.ts --out-dir ./.build --config-file .swcrc",
-		"build:parcel": "parcel build",
-		"build:vite": "vite build"
+		"build": "pnpm run typecheck && rm -rf ./.dist && pnpm run build:parcel",
+		"build:parcel": "parcel build"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",

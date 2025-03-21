@@ -15,8 +15,6 @@ function restore_handler_declaration(contents, map) {
 
 	const [functionDeclaration, handlerAlias] = declarationRegexp.exec(optContents) ?? [];
 
-	console.log({ functionDeclaration, handlerAlias });
-
 	if (functionDeclaration !== undefined && handlerAlias !== undefined) {
 		optContents = optContents.replace(`const ${handlerAlias} = async function handler`, `async function ${handlerAlias}`);
 	}

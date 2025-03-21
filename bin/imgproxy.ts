@@ -9,8 +9,8 @@ import type { AwsEnvStackProps } from "../lib/imgproxy-stack";
 const config = getConfig();
 const stackProps: AwsEnvStackProps = {
 	env: {
-		account: process.env.CDK_DEPLOY_ACCOUNT || process.env.CDK_DEFAULT_ACCOUNT,
-		region: process.env.CDK_DEPLOY_REGION || process.env.CDK_DEFAULT_REGION,
+		account: process.env.CDK_DEPLOY_ACCOUNT || process.env.CDK_DEFAULT_ACCOUNT || "specify_account",
+		region: process.env.CDK_DEPLOY_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1",
 	},
 	config: getConfig(),
 };

@@ -28,19 +28,19 @@ payload='{
 payload=$(echo "${payload}" | sed "s/EXP_TIME/${exp}/g")
 
 base64_encode() {
-    declare input=${1:-$(</dev/stdin)}
-    # Use `tr` to URL encode the output from base64.
-    printf '%s' "${input}" | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n'
+  declare input=${1:-$(</dev/stdin)}
+  # Use `tr` to URL encode the output from base64.
+  printf '%s' "${input}" | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n'
 }
 
 json() {
-    declare input=${1:-$(</dev/stdin)}
-    printf '%s' "${input}"
+  declare input=${1:-$(</dev/stdin)}
+  printf '%s' "${input}"
 }
 
 hmacsha256_sign() {
-    declare input=${1:-$(</dev/stdin)}
-    printf '%s' "${input}" | openssl dgst -binary -sha256 -hmac "${secret}"
+  declare input=${1:-$(</dev/stdin)}
+  printf '%s' "${input}" | openssl dgst -binary -sha256 -hmac "${secret}"
 }
 
 header_base64=$(echo "${header}" | json | base64_encode)

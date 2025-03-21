@@ -1,3 +1,4 @@
+/**
 import { aws_ssm as ssm } from "aws-cdk-lib";
 import { $, ExecaError, execa } from "execa";
 
@@ -183,3 +184,4 @@ async function putParameter(
 		}
 	}
 }
+*/

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { expect, test } from "vitest";
 
 import { handler } from "../index";
 
