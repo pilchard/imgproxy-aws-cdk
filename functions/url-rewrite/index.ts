@@ -10,15 +10,29 @@ import crypto from "crypto";
 
 import cf from "cloudfront";
 
-import type { CloudFrontKvsFormat, CloudFrontKvsFormatLabel, CloudFrontKvsHandle } from "@pilchard/aws-cloudfront-function";
+import type {
+	CloudFrontKvsFormat,
+	CloudFrontKvsFormatLabel,
+	CloudFrontKvsHandle,
+} from "@pilchard/aws-cloudfront-function";
+import type { Option } from "../utility";
 import type { ImgproxyMetaOption, ImgproxyOption } from "./imgproxy-option-data.ts";
-import type { UrlRewrite } from "./url-rewrite.d.ts";
-import type { Option } from "./utility.d.ts";
 
 export type MergeAction = "overwrite" | "concat" | "merge";
 export type MergeOptions = { action: MergeAction; gravityOffset?: number; };
 
 export type OptionPartition = Record<string, string[]>;
+export type LogLevel = "none" | "error" | "warn" | "info" | "debug";
+
+export type Config = {
+	imgproxy_salt: string;
+	imgproxy_key: string;
+	imgproxy_signature_size: number;
+	imgproxy_trusted_signatures: string[];
+	imgproxy_arguments_separator: string;
+	log_level: LogLevel;
+};
+
 /**
  * D A T A
  */
@@ -77,7 +91,7 @@ function optionPriorityOrder(a: [string, string[]], b: [string, string[]]) {
 	return optionPriority.indexOf(a[0]) - optionPriority.indexOf(b[0]);
 }
 
-const logLevelMap: Record<UrlRewrite.LogLevel, { prefix: string; index: number; }> = {
+const logLevelMap: Record<LogLevel, { prefix: string; index: number; }> = {
 	none: { prefix: "", index: 0 },
 	error: { prefix: "[ERROR]", index: 1 },
 	warn: { prefix: "[WARN]", index: 2 },
@@ -90,7 +104,7 @@ const logLevelMap: Record<UrlRewrite.LogLevel, { prefix: string; index: number; 
  */
 
 const kvsHandle = cf.kvs();
-const defaultConfig: UrlRewrite.Config = {
+const defaultConfig: Config = {
 	imgproxy_salt: "",
 	imgproxy_key: "",
 	imgproxy_signature_size: 32,
@@ -118,7 +132,7 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 
 	logLine("Config fetched from kvs", "info");
 
-	const config = Object.assign(defaultConfig, kvsResponse.some as UrlRewrite.Config);
+	const config = Object.assign(defaultConfig, kvsResponse.some as Config);
 	logLine(`Fetched config: ${JSON.stringify(config)}`, "debug");
 	// update globals
 	LOG_LEVEL = resolveLogLevel(config.log_level);
@@ -152,7 +166,10 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 	logLine(`Source: ${request.headers.host.value}${request.uri}`, "debug");
 	logLine("parsing uri", "info");
 
-	const imgproxyUriRegexp = new RegExp(`^\\/([^\\/]+)\\/((?:[a-zA-Z_]+\\${ARGS_SEP}[^\\/]+\\/)+)?(plain\\/|enc\\/)?(.+)`, "g");
+	const imgproxyUriRegexp = new RegExp(
+		`^\\/([^\\/]+)\\/((?:[a-zA-Z_]+\\${ARGS_SEP}[^\\/]+\\/)+)?(plain\\/|enc\\/)?(.+)`,
+		"g",
+	);
 
 	const uriRegexpResult = imgproxyUriRegexp.exec(requestUri);
 
@@ -203,75 +220,156 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 
 	logLine("normalizing options", "info");
 
-	const optionStrings = processingOptionsString.split(PATH_SEP).map((e) => e.split(ARGS_SEP)).filter((e) => e.length >= 2);
+	const optionStrings = processingOptionsString.split(PATH_SEP).map((e) => e.split(ARGS_SEP)).filter((e) =>
+		e.length >= 2
+	);
 
 	logLine(`option_strings: ${JSON.stringify(optionStrings)}`, "info");
 
-	const partitionedOptionStrings: string[] = [];
-	const seen: Record<string, number> = {};
-	let partition: OptionPartition = {};
-	const cumulativeOptions: OptionPartition = {};
-	const normalizeArgs = (args: string[]) =>
-		args.map((a) => (a === "t" || a === "true") ? "1" : (a === "f" || a === "false") ? "0" : a.toLowerCase());
-	const partitionStringify = (partition: OptionPartition) =>
-		Object.entries(partition).sort(optionPriorityOrder).map((e) => {
-			const str = e[0] + ARGS_SEP + normalizeArgs(e[1]).join(ARGS_SEP);
-			console.log(str);
-			return str;
-		}).join(PATH_SEP);
-
-	const cyclePartition = () => {
-		if (Object.entries(partition).length) {
-			partitionedOptionStrings.push(partitionStringify(partition));
-			partition = {};
-		}
-	};
-	const partitionInsert = (option: ImgproxyOption, args: string[]) => {
-		const optionKey = option.short;
-
-		const mergeOptions: MergeOptions = option.merge === undefined
-			? { action: "overwrite" }
-			: (typeof option.merge === "string")
-			? { action: option.merge }
-			: option.merge;
-		const action = mergeOptions.action;
-		const gravityOffset = mergeOptions.gravityOffset;
-
-		switch (action) {
-			case "overwrite": {
-				if (!{}.hasOwnProperty.call(seen, optionKey)) {
-					partition[optionKey] = args;
-					seen[optionKey] = 1;
-				}
-				break;
+	const partition: {
+		result: string[];
+		seen: Record<string, number>;
+		current: OptionPartition;
+		cumulative: OptionPartition;
+		insert: (option: ImgproxyOption, args: string[]) => void;
+		resultAdd: (partition: OptionPartition) => void;
+		cycle: () => void;
+		end: () => void;
+		_stringify: (partition: OptionPartition) => string;
+		_normalize: (args: string[]) => string[];
+	} = {
+		result: [],
+		current: {},
+		cumulative: {},
+		seen: {},
+		_normalize(args) {
+			return args.map((a) =>
+				(a === "t" || a === "true") ? "1" : (a === "f" || a === "false") ? "0" : a.toLowerCase()
+			);
+		},
+		_stringify(partition) {
+			return Object.entries(partition).sort(optionPriorityOrder).map((e) =>
+				e[0] + ARGS_SEP + this._normalize(e[1]).join(ARGS_SEP)
+			).join(PATH_SEP);
+		},
+		end() {
+			this.resultAdd(this.current);
+			this.resultAdd(this.cumulative);
+			this.current = {};
+			this.cumulative = {};
+		},
+		cycle() {
+			this.resultAdd(this.current);
+			this.current = {};
+		},
+		resultAdd(partition) {
+			if (Object.entries(partition).length) {
+				this.result.push(this._stringify(partition));
 			}
-			case "concat": {
-				console.log(cumulativeOptions);
-				cumulativeOptions[optionKey] = (cumulativeOptions[optionKey] || []).concat(args);
-				break;
-			}
-			case "merge": {
-				const current = partition[optionKey];
-				if (
-					current === undefined
-					|| args.length === current.length
-					|| (gravityOffset !== undefined && (args[gravityOffset] === "sm" || args[gravityOffset] === "fp"))
-				) {
-					partition[optionKey] = args;
+		},
+		insert(option, args) {
+			const optionKey = option.short;
+
+			const mergeOptions: MergeOptions = option.merge === undefined
+				? { action: "overwrite" }
+				: (typeof option.merge === "string")
+				? { action: option.merge }
+				: option.merge;
+
+			switch (mergeOptions.action) {
+				case "overwrite": {
+					if (!{}.hasOwnProperty.call(this.seen, optionKey)) {
+						this.current[optionKey] = args;
+						this.seen[optionKey] = 1;
+					}
 					break;
 				}
-				for (let i = 0; i < args.length; i++) {
-					if (current[i] === "" || current[i] === undefined) {
-						current[i] = args[i];
-					}
+				case "concat": {
+					this.cumulative[optionKey] = (this.cumulative[optionKey] || []).concat(args);
+					break;
 				}
-				break;
+				case "merge": {
+					const current = this.current[optionKey];
+					if (
+						current === undefined
+						|| current.length === args.length
+						|| (mergeOptions.gravityOffset !== undefined
+							&& (args[mergeOptions.gravityOffset] === "sm" || args[mergeOptions.gravityOffset] === "fp"))
+					) {
+						this.current[optionKey] = args;
+						break;
+					}
+
+					for (let i = 0; i < args.length; i++) {
+						if (current[i] === "" || current[i] === undefined) {
+							current[i] = args[i];
+						}
+					}
+					break;
+				}
 			}
-		}
+		},
 	};
+	// const partitionedOptionStrings: string[] = [];
+	// const seen: Record<string, number> = {};
+	// let partition: OptionPartition = {};
+	// const cumulativeOptions: OptionPartition = {};
+	// const normalizeArgs = (args: string[]) =>
+	// 	args.map((a) => (a === "t" || a === "true") ? "1" : (a === "f" || a === "false") ? "0" : a.toLowerCase());
+	// const partitionStringify = (partition: OptionPartition) =>
+	// 	Object.entries(partition).sort(optionPriorityOrder).map((e) =>
+	// 		e[0] + ARGS_SEP + normalizeArgs(e[1]).join(ARGS_SEP)
+	// 	).join(PATH_SEP);
+	// const cyclePartition = () => {
+	// 	if (Object.entries(partition).length) {
+	// 		partitionedOptionStrings.push(partitionStringify(partition));
+	// 		partition = {};
+	// 	}
+	// };
+	// const partitionInsert = (option: ImgproxyOption, args: string[]) => {
+	// 	const optionKey = option.short;
+
+	// 	const mergeOptions: MergeOptions = option.merge === undefined
+	// 		? { action: "overwrite" }
+	// 		: (typeof option.merge === "string")
+	// 		? { action: option.merge }
+	// 		: option.merge;
+
+	// 	switch (mergeOptions.action) {
+	// 		case "overwrite": {
+	// 			if (!{}.hasOwnProperty.call(seen, optionKey)) {
+	// 				partition[optionKey] = args;
+	// 				seen[optionKey] = 1;
+	// 			}
+	// 			break;
+	// 		}
+	// 		case "concat": {
+	// 			cumulativeOptions[optionKey] = (cumulativeOptions[optionKey] || []).concat(args);
+	// 			break;
+	// 		}
+	// 		case "merge": {
+	// 			const current = partition[optionKey];
+	// 			if (
+	// 				current === undefined
+	// 				|| current.length === args.length
+	// 				|| (mergeOptions.gravityOffset !== undefined
+	// 					&& (args[mergeOptions.gravityOffset] === "sm" || args[mergeOptions.gravityOffset] === "fp"))
+	// 			) {
+	// 				partition[optionKey] = args;
+	// 				break;
+	// 			}
+
+	// 			for (let i = 0; i < args.length; i++) {
+	// 				if (current[i] === "" || current[i] === undefined) {
+	// 					current[i] = args[i];
+	// 				}
+	// 			}
+	// 			break;
+	// 		}
+	// 	}
+	// };
 
 	for (let i = optionStrings.length - 1; i >= 0; i--) {
-		console.log(partition);
 		const optionArr = optionStrings[i];
 		const option = getOption(optionArr[0].toLowerCase());
 		if (option !== undefined) {
@@ -283,40 +381,38 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 					if (metaOption !== undefined) {
 						if (j < args.length) {
 							const metaOptionArgs = j === metaOptions.length - 1 ? args.slice(j) : [args[j]];
-							partitionInsert(metaOption, metaOptionArgs);
+							partition.insert(metaOption, metaOptionArgs);
 						}
 					}
 				}
 			} else {
 				if (option.short === "pr") {
-					console.log("pr");
-					cyclePartition();
+					partition.cycle();
 
 					while (optionStrings[i - 1][0] === "pr" || optionStrings[i - 1][0] === "preset") {
 						args.push.apply(args, optionStrings[i - 1].slice(1));
 						i--;
 					}
-					partitionedOptionStrings.push(option.short + ARGS_SEP + args.join(ARGS_SEP));
+					partition.resultAdd({ pr: args });
 				} else {
-					partitionInsert(option, args);
+					partition.insert(option, args);
 				}
 			}
 		}
 		if (i === 0) {
-			cyclePartition();
-			if (Object.entries(cumulativeOptions).length) {
-				partitionedOptionStrings.push(partitionStringify(cumulativeOptions));
-			}
+			partition.end();
 		}
 	}
 
-	const normalizedOptionsString = partitionedOptionStrings.reverse().join(PATH_SEP);
+	const normalizedOptionsString = partition.result.reverse().join(PATH_SEP);
 
 	logLine("normalized parsed options", "info");
 	logLine(`normalized_option_string: ${normalizedOptionsString}`, "debug");
 
 	const newImgproxyPath = `/${normalizedOptionsString}/${sourceUrlType}${sourceUrl}`;
-	const newSignature = signingEnabled ? _sign(IMGPROXY_SALT, newImgproxyPath, IMGPROXY_KEY, IMGPROXY_SIGNATURE_SIZE) : signature;
+	const newSignature = signingEnabled
+		? _sign(IMGPROXY_SALT, newImgproxyPath, IMGPROXY_KEY, IMGPROXY_SIGNATURE_SIZE)
+		: signature;
 	const resultUri = `/${newSignature}${newImgproxyPath}`;
 	request.uri = resultUri;
 
@@ -383,15 +479,15 @@ function _hexDecode(hex: string) {
  * L O G G I N G
  */
 
-function resolveLogLevel(level: UrlRewrite.LogLevel): number {
+function resolveLogLevel(level: LogLevel): number {
 	// biome-ignore lint/complexity/useOptionalChain: <explanation>
 	return (logLevelMap[level] ?? {}).index ?? Number.POSITIVE_INFINITY;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-function logLine(logline: any, level: UrlRewrite.LogLevel) {
+function logLine(logline: any, level: LogLevel) {
 	if (resolveLogLevel(level) <= LOG_LEVEL) {
-		console.log(`${logLevelMap[level].prefix}${logline}`);
+		console.log(`${logLevelMap[level].prefix} ${logline}`);
 	}
 }
 

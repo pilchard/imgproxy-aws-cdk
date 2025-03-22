@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
 import type { FunctionEventRequest, FunctionRequestEvent } from "@pilchard/aws-cloudfront-function";
-import type { UrlRewrite } from "../url-rewrite.d.ts";
+import type { Config } from "../index";
 
 const _hexDecode = (hex: string) => Buffer.from(hex, "hex");
 
@@ -13,18 +13,26 @@ const _sign = (salt: string, target: string, secret: string, size: number) => {
 	return Buffer.from(hmac.digest().slice(0, size)).toString("base64url");
 };
 
-function _testDataFromOptions(inputOptions: string[], expectedOptions: string[], config: UrlRewrite.Config = configSigningDisabled) {
+function _testDataFromOptions(
+	inputOptions: string[],
+	expectedOptions: string[],
+	config: Config = configSigningDisabled,
+) {
 	const { imgproxy_salt, imgproxy_key, imgproxy_signature_size } = config;
 	const signingEnabled = !!(imgproxy_salt.length && imgproxy_key.length);
 
 	const inputUri = `/${inputOptions.join("/")}/${sourceUrl}`;
-	const inputSignature = signingEnabled ? _sign(imgproxy_salt, inputUri, imgproxy_key, imgproxy_signature_size) : "unsigned";
+	const inputSignature = signingEnabled
+		? _sign(imgproxy_salt, inputUri, imgproxy_key, imgproxy_signature_size)
+		: "unsigned";
 	const signedInputUri = `/${inputSignature}${inputUri}`;
 
 	const event: FunctionRequestEvent = { ...baseEvent, request: { ...baseEvent.request, uri: signedInputUri } };
 
 	const outputUri = `/${expectedOptions.join("/")}/${sourceUrl}`;
-	const outputSignature = signingEnabled ? _sign(imgproxy_salt, outputUri, imgproxy_key, imgproxy_signature_size) : "unsigned";
+	const outputSignature = signingEnabled
+		? _sign(imgproxy_salt, outputUri, imgproxy_key, imgproxy_signature_size)
+		: "unsigned";
 	const signedOutputUri = `/${outputSignature}${outputUri}`;
 
 	const expected: FunctionEventRequest = { ...baseEvent.request, uri: signedOutputUri };
@@ -49,7 +57,7 @@ const baseEvent: FunctionRequestEvent = {
 	},
 };
 // config
-const configSigningDisabled: UrlRewrite.Config = {
+const configSigningDisabled: Config = {
 	imgproxy_salt: "",
 	imgproxy_key: "",
 	imgproxy_signature_size: 32,
@@ -58,7 +66,7 @@ const configSigningDisabled: UrlRewrite.Config = {
 	log_level: "error",
 };
 
-const configSimpleSigning: UrlRewrite.Config = {
+const configSimpleSigning: Config = {
 	imgproxy_salt: "simplesalt",
 	imgproxy_key: "simplekey",
 	imgproxy_signature_size: 32,
@@ -68,7 +76,7 @@ const configSimpleSigning: UrlRewrite.Config = {
 };
 // // /dev/random signing
 
-export const data: { event: FunctionRequestEvent; config: UrlRewrite.Config; expected: FunctionEventRequest; }[] = [{
+export const data: { event: FunctionRequestEvent; config: Config; expected: FunctionEventRequest; }[] = [{
 	/** S I G N I N G */
 	event: {
 		version: "1.0",
