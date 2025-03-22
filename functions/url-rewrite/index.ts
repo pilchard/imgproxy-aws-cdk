@@ -20,7 +20,19 @@ import type { ImgproxyMetaOption, ImgproxyOption } from "./imgproxy-option-data.
 
 export type MergeAction = "overwrite" | "concat" | "merge";
 export type MergeOptions = { action: MergeAction; gravityOffset?: number; };
-
+export type Partition = {
+	_result: string[];
+	_seen: Record<string, number>;
+	_current: OptionPartition;
+	_cumulative: OptionPartition;
+	result: string[];
+	insert: (option: ImgproxyOption, args: string[]) => void;
+	resultAdd: (partition: OptionPartition) => void;
+	cycle: () => void;
+	end: () => void;
+	_stringify: (partition: OptionPartition) => string;
+	_normalize: (args: string[]) => string[];
+};
 export type OptionPartition = Record<string, string[]>;
 export type LogLevel = "none" | "error" | "warn" | "info" | "debug";
 
@@ -226,149 +238,7 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 
 	logLine(`option_strings: ${JSON.stringify(optionStrings)}`, "info");
 
-	const partition: {
-		result: string[];
-		seen: Record<string, number>;
-		current: OptionPartition;
-		cumulative: OptionPartition;
-		insert: (option: ImgproxyOption, args: string[]) => void;
-		resultAdd: (partition: OptionPartition) => void;
-		cycle: () => void;
-		end: () => void;
-		_stringify: (partition: OptionPartition) => string;
-		_normalize: (args: string[]) => string[];
-	} = {
-		result: [],
-		current: {},
-		cumulative: {},
-		seen: {},
-		_normalize(args) {
-			return args.map((a) =>
-				(a === "t" || a === "true") ? "1" : (a === "f" || a === "false") ? "0" : a.toLowerCase()
-			);
-		},
-		_stringify(partition) {
-			return Object.entries(partition).sort(optionPriorityOrder).map((e) =>
-				e[0] + ARGS_SEP + this._normalize(e[1]).join(ARGS_SEP)
-			).join(PATH_SEP);
-		},
-		end() {
-			this.resultAdd(this.current);
-			this.resultAdd(this.cumulative);
-			this.current = {};
-			this.cumulative = {};
-		},
-		cycle() {
-			this.resultAdd(this.current);
-			this.current = {};
-		},
-		resultAdd(partition) {
-			if (Object.entries(partition).length) {
-				this.result.push(this._stringify(partition));
-			}
-		},
-		insert(option, args) {
-			const optionKey = option.short;
-
-			const mergeOptions: MergeOptions = option.merge === undefined
-				? { action: "overwrite" }
-				: (typeof option.merge === "string")
-				? { action: option.merge }
-				: option.merge;
-
-			switch (mergeOptions.action) {
-				case "overwrite": {
-					if (!{}.hasOwnProperty.call(this.seen, optionKey)) {
-						this.current[optionKey] = args;
-						this.seen[optionKey] = 1;
-					}
-					break;
-				}
-				case "concat": {
-					this.cumulative[optionKey] = (this.cumulative[optionKey] || []).concat(args);
-					break;
-				}
-				case "merge": {
-					const current = this.current[optionKey];
-					if (
-						current === undefined
-						|| current.length === args.length
-						|| (mergeOptions.gravityOffset !== undefined
-							&& (args[mergeOptions.gravityOffset] === "sm" || args[mergeOptions.gravityOffset] === "fp"))
-					) {
-						this.current[optionKey] = args;
-						break;
-					}
-
-					for (let i = 0; i < args.length; i++) {
-						if (current[i] === "" || current[i] === undefined) {
-							current[i] = args[i];
-						}
-					}
-					break;
-				}
-			}
-		},
-	};
-	// const partitionedOptionStrings: string[] = [];
-	// const seen: Record<string, number> = {};
-	// let partition: OptionPartition = {};
-	// const cumulativeOptions: OptionPartition = {};
-	// const normalizeArgs = (args: string[]) =>
-	// 	args.map((a) => (a === "t" || a === "true") ? "1" : (a === "f" || a === "false") ? "0" : a.toLowerCase());
-	// const partitionStringify = (partition: OptionPartition) =>
-	// 	Object.entries(partition).sort(optionPriorityOrder).map((e) =>
-	// 		e[0] + ARGS_SEP + normalizeArgs(e[1]).join(ARGS_SEP)
-	// 	).join(PATH_SEP);
-	// const cyclePartition = () => {
-	// 	if (Object.entries(partition).length) {
-	// 		partitionedOptionStrings.push(partitionStringify(partition));
-	// 		partition = {};
-	// 	}
-	// };
-	// const partitionInsert = (option: ImgproxyOption, args: string[]) => {
-	// 	const optionKey = option.short;
-
-	// 	const mergeOptions: MergeOptions = option.merge === undefined
-	// 		? { action: "overwrite" }
-	// 		: (typeof option.merge === "string")
-	// 		? { action: option.merge }
-	// 		: option.merge;
-
-	// 	switch (mergeOptions.action) {
-	// 		case "overwrite": {
-	// 			if (!{}.hasOwnProperty.call(seen, optionKey)) {
-	// 				partition[optionKey] = args;
-	// 				seen[optionKey] = 1;
-	// 			}
-	// 			break;
-	// 		}
-	// 		case "concat": {
-	// 			cumulativeOptions[optionKey] = (cumulativeOptions[optionKey] || []).concat(args);
-	// 			break;
-	// 		}
-	// 		case "merge": {
-	// 			const current = partition[optionKey];
-	// 			if (
-	// 				current === undefined
-	// 				|| current.length === args.length
-	// 				|| (mergeOptions.gravityOffset !== undefined
-	// 					&& (args[mergeOptions.gravityOffset] === "sm" || args[mergeOptions.gravityOffset] === "fp"))
-	// 			) {
-	// 				partition[optionKey] = args;
-	// 				break;
-	// 			}
-
-	// 			for (let i = 0; i < args.length; i++) {
-	// 				if (current[i] === "" || current[i] === undefined) {
-	// 					current[i] = args[i];
-	// 				}
-	// 			}
-	// 			break;
-	// 		}
-	// 	}
-	// };
-
+	const partition: Partition = createPartition(optionPriorityOrder);
 	for (let i = optionStrings.length - 1; i >= 0; i--) {
 		const optionArr = optionStrings[i];
 		const option = getOption(optionArr[0].toLowerCase());
@@ -426,6 +296,87 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 	return request;
 };
 
+/**
+ * P A R T I T I O N
+ */
+function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]]) => number): Partition {
+	return {
+		_result: [],
+		_current: {},
+		_cumulative: {},
+		_seen: {},
+		get result() {
+			return this._result;
+		},
+		_normalize(args) {
+			return args.map((a) =>
+				(a === "t" || a === "true") ? "1" : (a === "f" || a === "false") ? "0" : a.toLowerCase()
+			);
+		},
+		_stringify(partition) {
+			return Object.entries(partition).sort(sortOrder).map((e) =>
+				e[0] + ARGS_SEP + this._normalize(e[1]).join(ARGS_SEP)
+			).join(PATH_SEP);
+		},
+		end() {
+			this.resultAdd(this._current);
+			this.resultAdd(this._cumulative);
+			this._current = {};
+			this._cumulative = {};
+		},
+		cycle() {
+			this.resultAdd(this._current);
+			this._current = {};
+		},
+		resultAdd(partition) {
+			if (Object.entries(partition).length) {
+				this._result.push(this._stringify(partition));
+			}
+		},
+		insert(option, args) {
+			const optionKey = option.short;
+
+			const mergeOptions: MergeOptions = option.merge === undefined
+				? { action: "overwrite" }
+				: (typeof option.merge === "string")
+				? { action: option.merge }
+				: option.merge;
+
+			switch (mergeOptions.action) {
+				case "overwrite": {
+					if (!{}.hasOwnProperty.call(this._seen, optionKey)) {
+						this._current[optionKey] = args;
+						this._seen[optionKey] = 1;
+					}
+					break;
+				}
+				case "concat": {
+					this._cumulative[optionKey] = (this._cumulative[optionKey] || []).concat(args);
+					break;
+				}
+				case "merge": {
+					const current = this._current[optionKey];
+					if (
+						current === undefined
+						|| current.length === args.length
+						|| (mergeOptions.gravityOffset !== undefined
+							&& (args[mergeOptions.gravityOffset] === "sm" || args[mergeOptions.gravityOffset] === "fp"))
+					) {
+						this._current[optionKey] = args;
+						break;
+					}
+
+					for (let i = 0; i < args.length; i++) {
+						if (current[i] === "" || current[i] === undefined) {
+							current[i] = args[i];
+						}
+					}
+					break;
+				}
+			}
+		},
+	};
+}
 /**
  * K E Y  V A L U E  S T O R E
  */
