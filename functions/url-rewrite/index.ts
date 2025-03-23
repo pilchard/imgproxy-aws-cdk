@@ -18,7 +18,7 @@ import type {
 import type { Option } from "../utility";
 import type { ImgproxyMetaOption, ImgproxyOption } from "./imgproxy-option-data.ts";
 
-export type MergeAction = "overwrite" | "concat" | "merge";
+export type MergeAction = "overwrite" | "merge" | "concat" | "concat_global";
 export type MergeOptions = { action: MergeAction; gravityOffset?: number; };
 export type Partition = {
 	_result: string[];
@@ -27,16 +27,16 @@ export type Partition = {
 	_cumulative: OptionPartition;
 	result: string[];
 	insert: (option: ImgproxyOption, args: string[]) => void;
-	resultAdd: (partition: OptionPartition) => void;
+	commit: (partition: OptionPartition) => void;
 	cycle: () => void;
 	end: () => void;
 	_stringify: (partition: OptionPartition) => string;
-	_normalize: (args: string[]) => string[];
+	_normalize: (optKey: string, args: string[]) => string[];
 };
 export type OptionPartition = Record<string, string[]>;
 export type LogLevel = "none" | "error" | "warn" | "info" | "debug";
 
-export type Config = {
+export type UrlRewriteConfig = {
 	imgproxy_salt: string;
 	imgproxy_key: string;
 	imgproxy_signature_size: number;
@@ -78,21 +78,23 @@ const imgproxyProcessingOptions: ImgproxyOption[] = [
 	{ full: "strip_color_profile", short: "scp" },
 	{ full: "enforce_thumbnail", short: "eth" },
 	{ full: "quality", short: "q" },
-	{ full: "format_quality", short: "fq", merge: "concat" },
+	{ full: "format_quality", short: "fq", merge: "concat_global" },
 	{ full: "max_bytes", short: "mb" },
 	{ full: "format", short: "f", alt: "ext" },
-	{ full: "skip_processing", short: "skp", merge: "concat" },
+	{ full: "skip_processing", short: "skp", merge: "concat_global" },
 	{ full: "raw", short: "raw" },
 	{ full: "cache_buster", short: "cb" },
 	{ full: "expires", short: "exp" },
 	{ full: "filename", short: "fn" },
 	{ full: "return_attachment", short: "att" },
-	{ full: "preset", short: "pr" },
+	{ full: "preset", short: "pr", merge: "concat" },
 	{ full: "max_src_resolution", short: "msr" },
 	{ full: "max_src_file_size", short: "msfs" },
 	{ full: "max_animation_frames", short: "maf" },
 	{ full: "max_animation_frame_resolution", short: "mafr" },
 ];
+
+const caseSensitiveOptions = ["fn"];
 
 const getOption = (label: string) =>
 	imgproxyProcessingOptions.find((option) => option.full === label || option.short === label || option.alt === label);
@@ -103,6 +105,10 @@ function optionPriorityOrder(a: [string, string[]], b: [string, string[]]) {
 	return optionPriority.indexOf(a[0]) - optionPriority.indexOf(b[0]);
 }
 
+/**
+ * G L O B A L S
+ */
+
 const logLevelMap: Record<LogLevel, { prefix: string; index: number; }> = {
 	none: { prefix: "", index: 0 },
 	error: { prefix: "[ERROR]", index: 1 },
@@ -111,12 +117,8 @@ const logLevelMap: Record<LogLevel, { prefix: string; index: number; }> = {
 	debug: { prefix: "[DEBUG]", index: 4 },
 };
 
-/**
- * G L O B A L S
- */
-
 const kvsHandle = cf.kvs();
-const defaultConfig: Config = {
+const defaultConfig: UrlRewriteConfig = {
 	imgproxy_salt: "",
 	imgproxy_key: "",
 	imgproxy_signature_size: 32,
@@ -144,7 +146,7 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 
 	logLine("Config fetched from kvs", "info");
 
-	const config = Object.assign(defaultConfig, kvsResponse.some as Config);
+	const config = Object.assign(defaultConfig, kvsResponse.some as UrlRewriteConfig);
 	logLine(`Fetched config: ${JSON.stringify(config)}`, "debug");
 	// update globals
 	LOG_LEVEL = resolveLogLevel(config.log_level);
@@ -258,12 +260,11 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 			} else {
 				if (option.short === "pr") {
 					partition.cycle();
-
-					while (optionStrings[i - 1][0] === "pr" || optionStrings[i - 1][0] === "preset") {
-						args.push.apply(args, optionStrings[i - 1].slice(1));
+					while (i > 0 && (optionStrings[i - 1][0] === "pr" || optionStrings[i - 1][0] === "preset")) {
+						args.unshift.apply(args, optionStrings[i - 1].slice(1));
 						i--;
 					}
-					partition.resultAdd({ pr: args });
+					partition.commit({ pr: args });
 				} else {
 					partition.insert(option, args);
 				}
@@ -308,30 +309,36 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 		get result() {
 			return this._result;
 		},
-		_normalize(args) {
+		_normalize(optKey, args) {
 			return args.map((a) =>
-				(a === "t" || a === "true") ? "1" : (a === "f" || a === "false") ? "0" : a.toLowerCase()
+				(a === "t" || a === "true")
+					? "1"
+					: (a === "f" || a === "false")
+					? "0"
+					: caseSensitiveOptions.includes(optKey)
+					? a
+					: a.toLowerCase()
 			);
 		},
 		_stringify(partition) {
 			return Object.entries(partition).sort(sortOrder).map((e) =>
-				e[0] + ARGS_SEP + this._normalize(e[1]).join(ARGS_SEP)
+				e[0] + ARGS_SEP + this._normalize(e[0], e[1]).join(ARGS_SEP)
 			).join(PATH_SEP);
 		},
+		commit(partition) {
+			if (Object.entries(partition).length) {
+				this._result.push(this._stringify(partition));
+			}
+		},
 		end() {
-			this.resultAdd(this._current);
-			this.resultAdd(this._cumulative);
+			this.commit(this._current);
+			this.commit(this._cumulative);
 			this._current = {};
 			this._cumulative = {};
 		},
 		cycle() {
-			this.resultAdd(this._current);
+			this.commit(this._current);
 			this._current = {};
-		},
-		resultAdd(partition) {
-			if (Object.entries(partition).length) {
-				this._result.push(this._stringify(partition));
-			}
 		},
 		insert(option, args) {
 			const optionKey = option.short;
@@ -351,14 +358,17 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 					break;
 				}
 				case "concat": {
-					this._cumulative[optionKey] = (this._cumulative[optionKey] || []).concat(args);
+					this._current[optionKey] = args.concat(this._current[optionKey] || []);
+					break;
+				}
+				case "concat_global": {
+					this._cumulative[optionKey] = args.concat(this._cumulative[optionKey] || []);
 					break;
 				}
 				case "merge": {
 					const current = this._current[optionKey];
 					if (
 						current === undefined
-						|| current.length === args.length
 						|| (mergeOptions.gravityOffset !== undefined
 							&& (args[mergeOptions.gravityOffset] === "sm" || args[mergeOptions.gravityOffset] === "fp"))
 					) {
@@ -377,6 +387,7 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 		},
 	};
 }
+
 /**
  * K E Y  V A L U E  S T O R E
  */
