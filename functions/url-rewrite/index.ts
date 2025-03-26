@@ -24,12 +24,13 @@ export type Partition = {
 	_result: string[];
 	_seen: Record<string, number>;
 	_current: OptionPartition;
-	_cumulative: OptionPartition;
-	result: string[];
+	_global: OptionPartition;
+	result: string;
 	insert: (option: ImgproxyOption, args: string[]) => void;
-	commit: (partition: OptionPartition) => void;
+	commit: (partition: OptionPartition) => boolean;
 	cycle: () => void;
 	end: () => void;
+	includes: (optionKey: string) => boolean;
 	_stringify: (partition: OptionPartition) => string;
 	_normalize: (optKey: string, args: string[]) => string[];
 };
@@ -259,13 +260,19 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 				}
 			} else {
 				if (option.short === "pr") {
-					partition.cycle();
-					while (i > 0 && (optionStrings[i - 1][0] === "pr" || optionStrings[i - 1][0] === "preset")) {
-						args.unshift.apply(args, optionStrings[i - 1].slice(1));
-						i--;
+					if (!partition.includes("pr")) {
+						partition.cycle();
 					}
-					partition.commit({ pr: args });
+					partition.insert(option, args);
+					// while (i > 0 && (optionStrings[i - 1][0] === "pr" || optionStrings[i - 1][0] === "preset")) {
+					// 	args.unshift.apply(args, optionStrings[i - 1].slice(1));
+					// 	i--;
+					// }
+					// partition.commit({ pr: args });
 				} else {
+					// if (partition.includes("pr")) {
+					// 	partition.cycle();
+					// }
 					partition.insert(option, args);
 				}
 			}
@@ -275,7 +282,7 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 		}
 	}
 
-	const normalizedOptionsString = partition.result.reverse().join(PATH_SEP);
+	const normalizedOptionsString = partition.result;
 
 	logLine("normalized parsed options", "info");
 	logLine(`normalized_option_string: ${normalizedOptionsString}`, "debug");
@@ -304,10 +311,10 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 	return {
 		_result: [],
 		_current: {},
-		_cumulative: {},
+		_global: {},
 		_seen: {},
 		get result() {
-			return this._result;
+			return this._result.reverse().join(PATH_SEP);
 		},
 		_normalize(optKey, args) {
 			return args.map((a) =>
@@ -325,21 +332,34 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 				e[0] + ARGS_SEP + this._normalize(e[0], e[1]).join(ARGS_SEP)
 			).join(PATH_SEP);
 		},
+		includes(optionKey) {
+			return {}.hasOwnProperty.call(this._current, optionKey);
+		},
 		commit(partition) {
 			if (Object.entries(partition).length) {
 				this._result.push(this._stringify(partition));
+				return true;
+			}
+			return false;
+		},
+		cycle() {
+			if (this.commit(this._current)) {
+				this._current = {};
 			}
 		},
 		end() {
-			this.commit(this._current);
-			this.commit(this._cumulative);
-			this._current = {};
-			this._cumulative = {};
+			if (this.commit(this._current)) {
+				this._current = {};
+			}
+			if (this.commit(this._global)) {
+				this._global = {};
+			}
+			// this.commit(this._current);
+			// this.commit(this._global);
+			// this._current = {};
+			// this._global = {};
 		},
-		cycle() {
-			this.commit(this._current);
-			this._current = {};
-		},
+
 		insert(option, args) {
 			const optionKey = option.short;
 
@@ -362,25 +382,28 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 					break;
 				}
 				case "concat_global": {
-					this._cumulative[optionKey] = args.concat(this._cumulative[optionKey] || []);
+					this._global[optionKey] = args.concat(this._global[optionKey] || []);
 					break;
 				}
 				case "merge": {
-					const current = this._current[optionKey];
-					if (
-						current === undefined
-						|| (mergeOptions.gravityOffset !== undefined
-							&& (args[mergeOptions.gravityOffset] === "sm" || args[mergeOptions.gravityOffset] === "fp"))
-					) {
-						this._current[optionKey] = args;
-						break;
-					}
+					const gOffset = mergeOptions.gravityOffset;
+					const isOverwritingGravityOption = gOffset !== undefined
+						&& (args[gOffset] === "sm" || args[gOffset] === "fp");
 
-					for (let i = 0; i < args.length; i++) {
-						if (current[i] === "" || current[i] === undefined) {
-							current[i] = args[i];
+					if (!{}.hasOwnProperty.call(this._seen, optionKey)) {
+						this._current[optionKey] = this._current[optionKey] || [];
+						const current = this._current[optionKey];
+						for (let i = 0; i < args.length; i++) {
+							if (current[i] === undefined || current[i] === "") {
+								current[i] = args[i];
+							}
 						}
 					}
+
+					if (isOverwritingGravityOption) {
+						this._seen[optionKey] = 1;
+					}
+
 					break;
 				}
 			}
