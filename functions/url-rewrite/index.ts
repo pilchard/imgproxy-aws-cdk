@@ -21,16 +21,15 @@ import type { ImgproxyMetaOption, ImgproxyOption } from "./imgproxy-option-data.
 export type MergeAction = "overwrite" | "merge" | "concat" | "concat_global";
 export type MergeOptions = { action: MergeAction; gravityOffset?: number; };
 export type Partition = {
-	_result: string[];
+	_result: OptionPartition[];
 	_seen: Record<string, number>;
 	_current: OptionPartition;
 	_global: OptionPartition;
 	result: string;
 	insert: (option: ImgproxyOption, args: string[]) => void;
-	commit: (partition: OptionPartition) => boolean;
 	cycle: () => void;
 	end: () => void;
-	includes: (optionKey: string) => boolean;
+	_isEmpty: (Partition: OptionPartition) => boolean;
 	_stringify: (partition: OptionPartition) => string;
 	_normalize: (optKey: string, args: string[]) => string[];
 };
@@ -258,30 +257,16 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 						}
 					}
 				}
+			} else if (option.short === "pr") {
+				partition.cycle();
+				partition.insert(option, args);
+				partition.cycle();
 			} else {
-				if (option.short === "pr") {
-					if (!partition.includes("pr")) {
-						partition.cycle();
-					}
-					partition.insert(option, args);
-					// while (i > 0 && (optionStrings[i - 1][0] === "pr" || optionStrings[i - 1][0] === "preset")) {
-					// 	args.unshift.apply(args, optionStrings[i - 1].slice(1));
-					// 	i--;
-					// }
-					// partition.commit({ pr: args });
-				} else {
-					// if (partition.includes("pr")) {
-					// 	partition.cycle();
-					// }
-					partition.insert(option, args);
-				}
+				partition.insert(option, args);
 			}
 		}
-		if (i === 0) {
-			partition.end();
-		}
 	}
-
+	partition.end();
 	const normalizedOptionsString = partition.result;
 
 	logLine("normalized parsed options", "info");
@@ -310,21 +295,29 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]]) => number): Partition {
 	return {
 		_result: [],
-		_current: {},
+		_current: Object.create(null),
 		_global: {},
 		_seen: {},
 		get result() {
-			return this._result.reverse().join(PATH_SEP);
+			return this._result.reverse().map((opt) => this._stringify(opt)).join(PATH_SEP);
+		},
+		_isEmpty(partition) {
+			for (const prop in partition) {
+				if (Object.prototype.hasOwnProperty.call(partition, prop)) {
+					return false;
+				}
+			}
+
+			return true;
 		},
 		_normalize(optKey, args) {
-			return args.map((a) =>
-				(a === "t" || a === "true")
-					? "1"
-					: (a === "f" || a === "false")
-					? "0"
-					: caseSensitiveOptions.includes(optKey)
-					? a
-					: a.toLowerCase()
+			return args.map((a) => (a === "t" || a === "true")
+				? "1"
+				: (a === "f" || a === "false")
+				? "0"
+				: caseSensitiveOptions.includes(optKey)
+				? a
+				: a.toLowerCase()
 			);
 		},
 		_stringify(partition) {
@@ -332,32 +325,19 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 				e[0] + ARGS_SEP + this._normalize(e[0], e[1]).join(ARGS_SEP)
 			).join(PATH_SEP);
 		},
-		includes(optionKey) {
-			return {}.hasOwnProperty.call(this._current, optionKey);
-		},
-		commit(partition) {
-			if (Object.entries(partition).length) {
-				this._result.push(this._stringify(partition));
-				return true;
-			}
-			return false;
-		},
 		cycle() {
-			if (this.commit(this._current)) {
-				this._current = {};
+			if (!this._isEmpty(this._current)) {
+				this._result.push(this._current);
+				this._current = Object.create(null);
 			}
 		},
 		end() {
-			if (this.commit(this._current)) {
-				this._current = {};
+			if (!this._isEmpty(this._current)) {
+				this._result.push(this._current);
 			}
-			if (this.commit(this._global)) {
-				this._global = {};
+			if (!this._isEmpty(this._global)) {
+				this._result.push(this._global);
 			}
-			// this.commit(this._current);
-			// this.commit(this._global);
-			// this._current = {};
-			// this._global = {};
 		},
 
 		insert(option, args) {
@@ -371,14 +351,22 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 
 			switch (mergeOptions.action) {
 				case "overwrite": {
-					if (!{}.hasOwnProperty.call(this._seen, optionKey)) {
+					if (!Object.prototype.hasOwnProperty.call(this._seen, optionKey)) {
 						this._current[optionKey] = args;
 						this._seen[optionKey] = 1;
 					}
 					break;
 				}
 				case "concat": {
-					this._current[optionKey] = args.concat(this._current[optionKey] || []);
+					const previous = this._isEmpty(this._current)
+						&& this._result[this._result.length - 1]
+						&& this._result[this._result.length - 1][optionKey];
+					if (previous) {
+						this._result[this._result.length - 1][optionKey] = args.concat(previous);
+					} else {
+						this._current[optionKey] = args.concat(this._current[optionKey] || []);
+					}
+
 					break;
 				}
 				case "concat_global": {
@@ -390,7 +378,7 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 					const isOverwritingGravityOption = gOffset !== undefined
 						&& (args[gOffset] === "sm" || args[gOffset] === "fp");
 
-					if (!{}.hasOwnProperty.call(this._seen, optionKey)) {
+					if (!Object.prototype.hasOwnProperty.call(this._seen, optionKey)) {
 						this._current[optionKey] = this._current[optionKey] || [];
 						const current = this._current[optionKey];
 						for (let i = 0; i < args.length; i++) {
