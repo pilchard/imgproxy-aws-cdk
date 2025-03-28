@@ -1,13 +1,11 @@
 import { writeFileSync } from "node:fs";
-import type { MergeAction, MergeOptions } from ".";
+// import type { MergeAction, MergeOptions } from ".";
 
 export interface ImgproxyStdOption {
 	full: string;
 	short: string;
 	alt?: string;
-	pro?: boolean;
-	pkl?: "full" | "short" | "alt";
-	merge?: MergeAction | MergeOptions;
+	caseSensitive?: boolean;
 }
 export interface ImgproxyMetaOption extends ImgproxyStdOption {
 	metaOptions: string[];
@@ -50,7 +48,7 @@ const imgproxyProcessingOptions: ImgproxyOption[] = [
 	{ full: "raw", short: "raw" },
 	{ full: "cache_buster", short: "cb" },
 	{ full: "expires", short: "exp" },
-	{ full: "filename", short: "fn" },
+	{ full: "filename", short: "fn", caseSensitive: true },
 	{ full: "return_attachment", short: "att" },
 	{ full: "preset", short: "pr" },
 	{ full: "max_src_resolution", short: "msr" },

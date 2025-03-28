@@ -16,7 +16,7 @@ import type {
 	CloudFrontKvsHandle,
 } from "@pilchard/aws-cloudfront-function";
 import type { Option } from "../utility";
-import type { ImgproxyMetaOption, ImgproxyOption } from "./imgproxy-option-data.ts";
+import type { ImgproxyMetaOption, ImgproxyOption, ImgproxyStdOption } from "./imgproxy-option-data.ts";
 
 export type MergeAction = "overwrite" | "merge" | "concat" | "concat_global";
 export type MergeOptions = { action: MergeAction; gravityOffset?: number; };
@@ -63,50 +63,48 @@ const imgproxyProcessingOptions: ImgproxyOption[] = [
 	{ full: "zoom", short: "z" },
 	{ full: "dpr", short: "dpr" },
 	{ full: "enlarge", short: "el" },
-	{ full: "extend", short: "ex", merge: { action: "merge", gravityOffset: 1 } },
-	{ full: "extend_aspect_ratio", short: "exar", alt: "extend_ar", merge: { action: "merge", gravityOffset: 1 } },
-	{ full: "gravity", short: "g", merge: { action: "merge", gravityOffset: 0 } },
-	{ full: "crop", short: "c", merge: { action: "merge", gravityOffset: 2 } },
-	{ full: "trim", short: "t", merge: "merge" },
-	{ full: "padding", short: "pd", merge: "merge" },
+	{ full: "extend", short: "ex" },
+	{ full: "extend_aspect_ratio", short: "exar", alt: "extend_ar" },
+	{ full: "gravity", short: "g" },
+	{ full: "crop", short: "c" },
+	{ full: "trim", short: "t" },
+	{ full: "padding", short: "pd" },
 	{ full: "auto_rotate", short: "ar" },
 	{ full: "rotate", short: "rot" },
 	{ full: "background", short: "bg" },
 	{ full: "blur", short: "bl" },
 	{ full: "sharpen", short: "sh" },
 	{ full: "pixelate", short: "pix" },
-	{ full: "watermark", short: "wm", merge: "merge" },
+	{ full: "watermark", short: "wm" },
 	{ full: "strip_metadata", short: "sm" },
 	{ full: "keep_copyright", short: "kcr" },
 	{ full: "strip_color_profile", short: "scp" },
 	{ full: "enforce_thumbnail", short: "eth" },
 	{ full: "quality", short: "q" },
-	{ full: "format_quality", short: "fq", merge: "concat_global" },
+	{ full: "format_quality", short: "fq" },
 	{ full: "max_bytes", short: "mb" },
 	{ full: "format", short: "f", alt: "ext" },
-	{ full: "skip_processing", short: "skp", merge: "concat_global" },
+	{ full: "skip_processing", short: "skp" },
 	{ full: "raw", short: "raw" },
 	{ full: "cache_buster", short: "cb" },
 	{ full: "expires", short: "exp" },
-	{ full: "filename", short: "fn" },
+	{ full: "filename", short: "fn", caseSensitive: true },
 	{ full: "return_attachment", short: "att" },
-	{ full: "preset", short: "pr", merge: "concat" },
+	{ full: "preset", short: "pr" },
 	{ full: "max_src_resolution", short: "msr" },
 	{ full: "max_src_file_size", short: "msfs" },
 	{ full: "max_animation_frames", short: "maf" },
 	{ full: "max_animation_frame_resolution", short: "mafr" },
 ];
 
-const caseSensitiveOptions = ["fn"];
-
 const getOption = (label: string) =>
 	imgproxyProcessingOptions.find((option) => option.full === label || option.short === label || option.alt === label);
 
-const optionPriority = imgproxyProcessingOptions.map((o) => o.short);
+// const optionPriority = imgproxyProcessingOptions.map((o) => o.short);
 
-function optionPriorityOrder(a: [string, string[]], b: [string, string[]]) {
-	return optionPriority.indexOf(a[0]) - optionPriority.indexOf(b[0]);
-}
+// function optionPriorityOrder(a: [string, string[]], b: [string, string[]]) {
+// 	return optionPriority.indexOf(a[0]) - optionPriority.indexOf(b[0]);
+// }
 
 /**
  * G L O B A L S
@@ -237,14 +235,27 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 
 	logLine("normalizing options", "info");
 
+	const _stringify = (option: ImgproxyStdOption, args: string[]) => {
+		const normalizedArgs = args.map((a) =>
+			(a === "t" || a === "true")
+				? "1"
+				: (a === "f" || a === "false")
+				? "0"
+				: option.caseSensitive
+				? a
+				: a.toLowerCase()
+		);
+		return option.short + ARGS_SEP + normalizedArgs.join(ARGS_SEP);
+	};
+
 	const optionStrings = processingOptionsString.split(PATH_SEP).map((e) => e.split(ARGS_SEP)).filter((e) =>
 		e.length >= 2
 	);
 
 	logLine(`option_strings: ${JSON.stringify(optionStrings)}`, "info");
 
-	const partition: Partition = createPartition(optionPriorityOrder);
-	for (let i = optionStrings.length - 1; i >= 0; i--) {
+	const result = [];
+	for (let i = 0; i < optionStrings.length; i++) {
 		const optionArr = optionStrings[i];
 		const option = getOption(optionArr[0].toLowerCase());
 		if (option !== undefined) {
@@ -256,21 +267,19 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 					if (metaOption !== undefined) {
 						if (j < args.length) {
 							const metaOptionArgs = j === metaOptions.length - 1 ? args.slice(j) : [args[j]];
-							partition.insert(metaOption, metaOptionArgs);
+							result.push(_stringify(metaOption, metaOptionArgs));
 						}
 					}
 				}
 			} // expand meta-options
-			else if (option.short === "pr") {
-				partition.part(option, args);
-			} // partition
+
 			else {
-				partition.insert(option, args);
+				result.push(_stringify(option, args));
 			} // insert
 		}
 	}
-	partition.end();
-	const normalizedOptionsString = partition.result;
+
+	const normalizedOptionsString = result.join("/");
 
 	logLine("normalized parsed options", "info");
 	logLine(`normalized_option_string: ${normalizedOptionsString}`, "debug");
@@ -295,118 +304,118 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 /**
  * P A R T I T I O N
  */
-function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]]) => number): Partition {
-	return {
-		_result: [],
-		_current: Object.create(null),
-		_global: {},
-		_seen: {},
-		get result() {
-			return this._result.reverse().map((opt) => this._stringify(opt)).join(PATH_SEP);
-		},
-		_normalize(optKey, args) {
-			return args.map((a) =>
-				(a === "t" || a === "true")
-					? "1"
-					: (a === "f" || a === "false")
-					? "0"
-					: caseSensitiveOptions.includes(optKey)
-					? a
-					: a.toLowerCase()
-			);
-		},
-		_stringify(partition) {
-			return Object.entries(partition).sort(sortOrder).map((e) =>
-				e[0] + ARGS_SEP + this._normalize(e[0], e[1]).join(ARGS_SEP)
-			).join(PATH_SEP);
-		},
-		cycle() {
-			if (!this._isEmpty(this._current)) {
-				this._result.push(this._current);
-				this._current = Object.create(null);
-			}
-		},
-		end() {
-			if (!this._isEmpty(this._current)) {
-				this._result.push(this._current);
-			}
-			if (!this._isEmpty(this._global)) {
-				this._result.push(this._global);
-			}
-		},
-		part(option, args) {
-			this.cycle();
+// function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]]) => number): Partition {
+// 	return {
+// 		_result: [],
+// 		_current: Object.create(null),
+// 		_global: {},
+// 		_seen: {},
+// 		get result() {
+// 			return this._result.reverse().map((opt) => this._stringify(opt)).join(PATH_SEP);
+// 		},
+// 		_normalize(optKey, args) {
+// 			return args.map((a) =>
+// 				(a === "t" || a === "true")
+// 					? "1"
+// 					: (a === "f" || a === "false")
+// 					? "0"
+// 					: caseSensitiveOptions.includes(optKey)
+// 					? a
+// 					: a.toLowerCase()
+// 			);
+// 		},
+// 		_stringify(partition) {
+// 			return Object.entries(partition).sort(sortOrder).map((e) =>
+// 				e[0] + ARGS_SEP + this._normalize(e[0], e[1]).join(ARGS_SEP)
+// 			).join(PATH_SEP);
+// 		},
+// 		cycle() {
+// 			if (!this._isEmpty(this._current)) {
+// 				this._result.push(this._current);
+// 				this._current = Object.create(null);
+// 			}
+// 		},
+// 		end() {
+// 			if (!this._isEmpty(this._current)) {
+// 				this._result.push(this._current);
+// 			}
+// 			if (!this._isEmpty(this._global)) {
+// 				this._result.push(this._global);
+// 			}
+// 		},
+// 		part(option, args) {
+// 			this.cycle();
 
-			const optionKey = option.short;
-			const prev = this._result[this._result.length - 1];
-			if (prev && this._hasOwn(prev, optionKey)) {
-				prev[optionKey] = args.concat(prev[optionKey]);
-			} else {
-				this._result.push({ [optionKey]: args });
-			}
-		},
-		insert(option, args) {
-			const optionKey = option.short;
+// 			const optionKey = option.short;
+// 			const prev = this._result[this._result.length - 1];
+// 			if (prev && this._hasOwn(prev, optionKey)) {
+// 				prev[optionKey] = args.concat(prev[optionKey]);
+// 			} else {
+// 				this._result.push({ [optionKey]: args });
+// 			}
+// 		},
+// 		insert(option, args) {
+// 			const optionKey = option.short;
 
-			const mergeOptions: MergeOptions = option.merge === undefined
-				? { action: "overwrite" }
-				: (typeof option.merge === "string")
-				? { action: option.merge }
-				: option.merge;
+// 			const mergeOptions: MergeOptions = option.merge === undefined
+// 				? { action: "overwrite" }
+// 				: (typeof option.merge === "string")
+// 				? { action: option.merge }
+// 				: option.merge;
 
-			switch (mergeOptions.action) {
-				case "overwrite": {
-					if (!this._hasOwn(this._seen, optionKey)) {
-						this._current[optionKey] = args;
-						this._seen[optionKey] = 1;
-					}
-					break;
-				}
-				case "concat": {
-					this._current[optionKey] = args.concat(this._current[optionKey] || []);
-					break;
-				}
-				case "concat_global": {
-					this._global[optionKey] = args.concat(this._global[optionKey] || []);
-					break;
-				}
-				case "merge": {
-					const gOffset = mergeOptions.gravityOffset;
-					const isOverwritingGravityOption = gOffset !== undefined
-						&& (args[gOffset] === "sm" || args[gOffset] === "fp");
+// 			switch (mergeOptions.action) {
+// 				case "overwrite": {
+// 					if (!this._hasOwn(this._seen, optionKey)) {
+// 						this._current[optionKey] = args;
+// 						this._seen[optionKey] = 1;
+// 					}
+// 					break;
+// 				}
+// 				case "concat": {
+// 					this._current[optionKey] = args.concat(this._current[optionKey] || []);
+// 					break;
+// 				}
+// 				case "concat_global": {
+// 					this._global[optionKey] = args.concat(this._global[optionKey] || []);
+// 					break;
+// 				}
+// 				case "merge": {
+// 					const gOffset = mergeOptions.gravityOffset;
+// 					const isOverwritingGravityOption = gOffset !== undefined
+// 						&& (args[gOffset] === "sm" || args[gOffset] === "fp");
 
-					if (!this._hasOwn(this._seen, optionKey)) {
-						this._current[optionKey] = this._current[optionKey] || [];
-						const current = this._current[optionKey];
-						for (let i = 0; i < args.length; i++) {
-							if (current[i] === undefined || current[i] === "") {
-								current[i] = args[i];
-							}
-						}
-					}
+// 					if (!this._hasOwn(this._seen, optionKey)) {
+// 						this._current[optionKey] = this._current[optionKey] || [];
+// 						const current = this._current[optionKey];
+// 						for (let i = 0; i < args.length; i++) {
+// 							if (current[i] === undefined || current[i] === "") {
+// 								current[i] = args[i];
+// 							}
+// 						}
+// 					}
 
-					if (isOverwritingGravityOption) {
-						this._seen[optionKey] = 1;
-					}
+// 					if (isOverwritingGravityOption) {
+// 						this._seen[optionKey] = 1;
+// 					}
 
-					break;
-				}
-			}
-		},
-		_isEmpty(partition) {
-			for (const prop in partition) {
-				if (this._hasOwn(partition, prop)) {
-					return false;
-				}
-			}
+// 					break;
+// 				}
+// 			}
+// 		},
+// 		_isEmpty(partition) {
+// 			for (const prop in partition) {
+// 				if (this._hasOwn(partition, prop)) {
+// 					return false;
+// 				}
+// 			}
 
-			return true;
-		},
-		_hasOwn(partition, key) {
-			return Object.prototype.hasOwnProperty.call(partition, key);
-		},
-	};
-}
+// 			return true;
+// 		},
+// 		_hasOwn(partition, key) {
+// 			return Object.prototype.hasOwnProperty.call(partition, key);
+// 		},
+// 	};
+// }
 
 /**
  * K E Y  V A L U E  S T O R E
