@@ -375,21 +375,61 @@ export const stdOptionRawData: [string, string[], string[]][] = [
 	["pd", ["pd:10:20:30"], ["pd:10:20:30"]],
 	["pd", ["pd:10:20:30:40"], ["pd:10:20:30:40"]],
 
-	["padding", ["padding:10", "padding:10:20", "padding:10:20:30", "padding:10:20:30:40"], ["pd:10:20:30:40"]],
-	["padding", ["padding:10", "padding::20", "padding:::30", "padding::::40"], ["pd:10:20:30:40"]],
-	["padding", ["padding:10:::", "padding::20::", "padding:::30:", "padding::::40"], ["pd:10:20:30:40"]],
-	["padding", ["padding:::30:", "padding::::40", "padding:10:::", "padding::20::"], ["pd:10:20:30:40"]],
-	["padding", ["padding:10:20:30:40", "padding:10:20:30", "padding:10:20", "padding:10"], ["pd:10:20:30:40"]],
-	["padding", ["pd::::40", "padding:::30", "pd::20", "padding:10"], ["pd:10:20:30:40"]],
-	["padding", ["padding::::40", "padding:::30:", "padding::20::", "padding:10:::"], ["pd:10:20:30:40"]],
+	["padding", ["padding:10", "padding:10:20", "padding:10:20:30", "padding:10:20:30:40"], [
+		"pd:10",
+		"pd:10:20",
+		"pd:10:20:30",
+		"pd:10:20:30:40",
+	]],
+	["padding", ["padding:10", "padding::20", "padding:::30", "padding::::40"], [
+		"pd:10",
+		"pd::20",
+		"pd:::30",
+		"pd::::40",
+	]],
+	["padding", ["padding:10:::", "padding::20::", "padding:::30:", "padding::::40"], [
+		"pd:10:::",
+		"pd::20::",
+		"pd:::30:",
+		"pd::::40",
+	]],
+	["padding", ["padding:::30:", "padding::::40", "padding:10:::", "padding::20::"], [
+		"pd:::30:",
+		"pd::::40",
+		"pd:10:::",
+		"pd::20::",
+	]],
+	["padding", ["padding:10:20:30:40", "padding:10:20:30", "padding:10:20", "padding:10"], [
+		"pd:10:20:30:40",
+		"pd:10:20:30",
+		"pd:10:20",
+		"pd:10",
+	]],
+	["padding", ["pd::::40", "padding:::30", "pd::20", "padding:10"], ["pd::::40", "pd:::30", "pd::20", "pd:10"]],
+	["padding", ["padding::::40", "padding:::30:", "padding::20::", "padding:10:::"], [
+		"pd::::40",
+		"pd:::30:",
+		"pd::20::",
+		"pd:10:::",
+	]],
 
-	["pd", ["pd:10", "pd:10:20", "pd:10:20:30", "pd:10:20:30:40"], ["pd:10:20:30:40"]],
-	["pd", ["pd:10", "pd::20", "pd:::30", "pd::::40"], ["pd:10:20:30:40"]],
-	["pd", ["pd:10:::", "pd::20::", "pd:::30:", "pd::::40"], ["pd:10:20:30:40"]],
-	["pd", ["pd:::30:", "pd::::40", "pd:10:::", "pd::20::"], ["pd:10:20:30:40"]],
-	["pd", ["pd:10:20:30:40", "pd:10:20:30", "pd:10:20", "pd:10"], ["pd:10:20:30:40"]],
-	["pd", ["pd::::40", "pd:::30", "pd::20", "pd:10"], ["pd:10:20:30:40"]],
-	["pd", ["pd::::40", "pd:::30:", "pd::20::", "pd:10:::"], ["pd:10:20:30:40"]],
+	["pd", ["pd:10", "pd:10:20", "pd:10:20:30", "pd:10:20:30:40"], [
+		"pd:10",
+		"pd:10:20",
+		"pd:10:20:30",
+		"pd:10:20:30:40",
+	]],
+	["pd", ["pd:10", "pd::20", "pd:::30", "pd::::40"], ["pd:10", "pd::20", "pd:::30", "pd::::40"]],
+	["pd", ["pd:10:::", "pd::20::", "pd:::30:", "pd::::40"], ["pd:10:::", "pd::20::", "pd:::30:", "pd::::40"]],
+	["pd", ["pd:::30:", "pd::::40", "pd:10:::", "pd::20::"], ["pd:::30:", "pd::::40", "pd:10:::", "pd::20::"]],
+	["pd", ["pd:10:20:30:40", "pd:10:20:30", "pd:10:20", "pd:10"], [
+		"pd:10:20:30:40",
+		"pd:10:20:30",
+		"pd:10:20",
+		"pd:10",
+	]],
+	["pd", ["pd::::40", "pd:::30", "pd::20", "pd:10"], ["pd::::40", "pd:::30", "pd::20", "pd:10"]],
+	["pd", ["pd::::40", "pd:::30:", "pd::20::", "pd:10:::"], ["pd::::40", "pd:::30:", "pd::20::", "pd:10:::"]],
 	/**
 	 * auto_rotate
 	 */
@@ -497,17 +537,17 @@ export const stdOptionRawData: [string, string[], string[]][] = [
 	["watermark", ["watermark:0.2:ce:-10"], ["wm:0.2:ce:-10"]],
 	["watermark", ["watermark:0.2:ce:-10:10"], ["wm:0.2:ce:-10:10"]],
 	["watermark", ["watermark:0.2:ce:-10:10:0.3"], ["wm:0.2:ce:-10:10:0.3"]],
-	["watermark", ["watermark:0.2:ce:-10:10", "watermark:0.2:ce::20"], ["wm:0.2:ce:-10:20"]],
-	["watermark", ["watermark:0.2:ce:-10:10", "watermark:0.2:we"], ["wm:0.2:we:-10:10"]],
-	["watermark", ["watermark:0.2:ce:-10:10", "watermark:0.2:we:::0.3"], ["wm:0.2:we:-10:10:0.3"]],
+	["watermark", ["watermark:0.2:ce:-10:10", "watermark:0.2:ce::20"], ["wm:0.2:ce:-10:10", "wm:0.2:ce::20"]],
+	["watermark", ["watermark:0.2:ce:-10:10", "watermark:0.2:we"], ["wm:0.2:ce:-10:10", "wm:0.2:we"]],
+	["watermark", ["watermark:0.2:ce:-10:10", "watermark:0.2:we:::0.3"], ["wm:0.2:ce:-10:10", "wm:0.2:we:::0.3"]],
 	["wm", ["wm:0.2"], ["wm:0.2"]],
 	["wm", ["wm:0.2:ce"], ["wm:0.2:ce"]],
 	["wm", ["wm:0.2:ce:-10"], ["wm:0.2:ce:-10"]],
 	["wm", ["wm:0.2:ce:-10:10"], ["wm:0.2:ce:-10:10"]],
 	["wm", ["wm:0.2:ce:-10:10:0.3"], ["wm:0.2:ce:-10:10:0.3"]],
-	["wm", ["wm:0.2:ce:-10:10", "wm:0.2:ce::20"], ["wm:0.2:ce:-10:20"]],
-	["wm", ["wm:0.2:ce:-10:10", "wm:0.2:we"], ["wm:0.2:we:-10:10"]],
-	["wm", ["wm:0.2:ce:-10:10", "wm:0.2:we:::0.3"], ["wm:0.2:we:-10:10:0.3"]],
+	["wm", ["wm:0.2:ce:-10:10", "wm:0.2:ce::20"], ["wm:0.2:ce:-10:10", "wm:0.2:ce::20"]],
+	["wm", ["wm:0.2:ce:-10:10", "wm:0.2:we"], ["wm:0.2:ce:-10:10", "wm:0.2:we"]],
+	["wm", ["wm:0.2:ce:-10:10", "wm:0.2:we:::0.3"], ["wm:0.2:ce:-10:10", "wm:0.2:we:::0.3"]],
 	/**
 	 * strip_metadata
 	 */
@@ -596,9 +636,12 @@ export const stdOptionRawData: [string, string[], string[]][] = [
 	 * Adds or redefines IMGPROXY_FORMAT_QUALITY values.
 	 */
 	["format_quality", ["format_quality:jpeg:70:webp:80"], ["fq:jpeg:70:webp:80"]],
-	["format_quality", ["format_quality:jpeg:70:webp:80", "format_quality:png:80"], ["fq:jpeg:70:webp:80:png:80"]],
+	["format_quality", ["format_quality:jpeg:70:webp:80", "format_quality:png:80"], [
+		"fq:jpeg:70:webp:80",
+		"fq:png:80",
+	]],
 	["fq", ["fq:jpeg:70:webp:80"], ["fq:jpeg:70:webp:80"]],
-	["fq", ["fq:jpeg:70:webp:80", "format_quality:png:80"], ["fq:jpeg:70:webp:80:png:80"]],
+	["fq", ["fq:jpeg:70:webp:80", "format_quality:png:80"], ["fq:jpeg:70:webp:80", "fq:png:80"]],
 	/**
 	 * Max bytes
 	 * max_bytes:%bytes
@@ -630,9 +673,9 @@ export const stdOptionRawData: [string, string[], string[]][] = [
 	 * skp:%extension1:%extension2:...:%extensionN
 	 */
 	["skip_processing", ["skip_processing:webp:jpg"], ["skp:webp:jpg"]],
-	["skip_processing", ["skip_processing:webp:jpg", "skip_processing:png"], ["skp:webp:jpg:png"]],
+	["skip_processing", ["skip_processing:webp:jpg", "skip_processing:png"], ["skp:webp:jpg", "skp:png"]],
 	["skp", ["skp:webp:jpg"], ["skp:webp:jpg"]],
-	["skp", ["skp:webp:jpg", "skp:png"], ["skp:webp:jpg:png"]],
+	["skp", ["skp:webp:jpg", "skp:png"], ["skp:webp:jpg", "skp:png"]],
 	/**
 	 * raw
 	 */
@@ -702,11 +745,12 @@ export const stdOptionRawData: [string, string[], string[]][] = [
 	 * preset
 	 */
 	["preset", ["preset:preset1:preset2"], ["pr:preset1:preset2"]],
-	["preset", ["preset:preset1:preset2", "preset:preset3"], ["pr:preset1:preset2:preset3"]],
+	["preset", ["preset:preset1:preset2", "preset:preset3"], ["pr:preset1:preset2", "pr:preset3"]],
 	["pr", ["pr:preset1:preset2"], ["pr:preset1:preset2"]],
 	["pr", ["w:100", "pr:preset1:preset2", "preset:preset3", "att:0"], [
 		"w:100",
-		"pr:preset1:preset2:preset3",
+		"pr:preset1:preset2",
+		"pr:preset3",
 		"att:0",
 	]],
 	/**

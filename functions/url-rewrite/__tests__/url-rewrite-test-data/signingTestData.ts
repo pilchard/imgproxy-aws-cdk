@@ -27,7 +27,7 @@ export const signingTestData: {
 	config: configSimpleSigning,
 	expected: {
 		method: "GET",
-		uri: "/EMoOpuFyriqwIl3vqf0KwkdShTj6XLF1FVHQsjwwTbs/rt:fill/h:400/el:0/ex:0:ce/pr:square/w:10/aHR0cHM6Ly9tLm1l/ZGlhLWFtYXpvbi5j/b20vaW1hZ2VzL00v/TVY1Qk1tUTNabVk0/TnpZdFkyVm1ZaTAw/WkRSbUxUZ3lPREF0/WldZelpqaGxOemsx/TnpVMlhrRXlYa0Zx/Y0dkZVFYVnlOVGMz/TWpVek5USUAuanBn",
+		uri: "/TPlLoIz8WrKV0brweeWaIEOMJS0euuuMIMXYh2Wjzc0/rt:fill/w:300/h:400/el:0/ex:0:ce/pr:square/w:10/aHR0cHM6Ly9tLm1l/ZGlhLWFtYXpvbi5j/b20vaW1hZ2VzL00v/TVY1Qk1tUTNabVk0/TnpZdFkyVm1ZaTAw/WkRSbUxUZ3lPREF0/WldZelpqaGxOemsx/TnpVMlhrRXlYa0Zx/Y0dkZVFYVnlOVGMz/TWpVek5USUAuanBn",
 		querystring: {},
 		headers: { host: { value: "https://test.local" }, accept: { value: "image/*" } },
 		cookies: {},
@@ -49,7 +49,7 @@ export const signingTestData: {
 	config: configSigningDisabled,
 	expected: {
 		method: "GET",
-		uri: "/unsigned/rt:fill/h:400/el:0/pr:square/w:10/aHR0cHM6Ly9tLm1l/ZGlhLWFtYXpvbi5j/b20vaW1hZ2VzL00v/TVY1Qk1tUTNabVk0/TnpZdFkyVm1ZaTAw/WkRSbUxUZ3lPREF0/WldZelpqaGxOemsx/TnpVMlhrRXlYa0Zx/Y0dkZVFYVnlOVGMz/TWpVek5USUAuanBn",
+		uri: "/unsigned/rt:fill/w:300/h:400/el:0/pr:square/w:10/aHR0cHM6Ly9tLm1l/ZGlhLWFtYXpvbi5j/b20vaW1hZ2VzL00v/TVY1Qk1tUTNabVk0/TnpZdFkyVm1ZaTAw/WkRSbUxUZ3lPREF0/WldZelpqaGxOemsx/TnpVMlhrRXlYa0Zx/Y0dkZVFYVnlOVGMz/TWpVek5USUAuanBn",
 		querystring: {},
 		headers: { host: { value: "https://test.local" }, accept: { value: "image/*" } },
 		cookies: {},
