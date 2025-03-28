@@ -27,11 +27,14 @@ export type Partition = {
 	_global: OptionPartition;
 	result: string;
 	insert: (option: ImgproxyOption, args: string[]) => void;
+	part: (option: ImgproxyOption, args: string[]) => void;
 	cycle: () => void;
 	end: () => void;
-	_isEmpty: (Partition: OptionPartition) => boolean;
 	_stringify: (partition: OptionPartition) => string;
 	_normalize: (optKey: string, args: string[]) => string[];
+	// utility
+	_isEmpty: (partition: Record<string, unknown>) => boolean;
+	_hasOwn: (partition: Record<string, unknown>, key: string) => boolean;
 };
 export type OptionPartition = Record<string, string[]>;
 export type LogLevel = "none" | "error" | "warn" | "info" | "debug";
@@ -257,13 +260,13 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 						}
 					}
 				}
-			} else if (option.short === "pr") {
-				partition.cycle();
+			} // expand meta-options
+			else if (option.short === "pr") {
+				partition.part(option, args);
+			} // partition
+			else {
 				partition.insert(option, args);
-				partition.cycle();
-			} else {
-				partition.insert(option, args);
-			}
+			} // insert
 		}
 	}
 	partition.end();
@@ -301,23 +304,15 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 		get result() {
 			return this._result.reverse().map((opt) => this._stringify(opt)).join(PATH_SEP);
 		},
-		_isEmpty(partition) {
-			for (const prop in partition) {
-				if (Object.prototype.hasOwnProperty.call(partition, prop)) {
-					return false;
-				}
-			}
-
-			return true;
-		},
 		_normalize(optKey, args) {
-			return args.map((a) => (a === "t" || a === "true")
-				? "1"
-				: (a === "f" || a === "false")
-				? "0"
-				: caseSensitiveOptions.includes(optKey)
-				? a
-				: a.toLowerCase()
+			return args.map((a) =>
+				(a === "t" || a === "true")
+					? "1"
+					: (a === "f" || a === "false")
+					? "0"
+					: caseSensitiveOptions.includes(optKey)
+					? a
+					: a.toLowerCase()
 			);
 		},
 		_stringify(partition) {
@@ -339,7 +334,17 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 				this._result.push(this._global);
 			}
 		},
+		part(option, args) {
+			this.cycle();
 
+			const optionKey = option.short;
+			const prev = this._result[this._result.length - 1];
+			if (prev && this._hasOwn(prev, optionKey)) {
+				prev[optionKey] = args.concat(prev[optionKey]);
+			} else {
+				this._result.push({ [optionKey]: args });
+			}
+		},
 		insert(option, args) {
 			const optionKey = option.short;
 
@@ -351,22 +356,14 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 
 			switch (mergeOptions.action) {
 				case "overwrite": {
-					if (!Object.prototype.hasOwnProperty.call(this._seen, optionKey)) {
+					if (!this._hasOwn(this._seen, optionKey)) {
 						this._current[optionKey] = args;
 						this._seen[optionKey] = 1;
 					}
 					break;
 				}
 				case "concat": {
-					const previous = this._isEmpty(this._current)
-						&& this._result[this._result.length - 1]
-						&& this._result[this._result.length - 1][optionKey];
-					if (previous) {
-						this._result[this._result.length - 1][optionKey] = args.concat(previous);
-					} else {
-						this._current[optionKey] = args.concat(this._current[optionKey] || []);
-					}
-
+					this._current[optionKey] = args.concat(this._current[optionKey] || []);
 					break;
 				}
 				case "concat_global": {
@@ -378,7 +375,7 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 					const isOverwritingGravityOption = gOffset !== undefined
 						&& (args[gOffset] === "sm" || args[gOffset] === "fp");
 
-					if (!Object.prototype.hasOwnProperty.call(this._seen, optionKey)) {
+					if (!this._hasOwn(this._seen, optionKey)) {
 						this._current[optionKey] = this._current[optionKey] || [];
 						const current = this._current[optionKey];
 						for (let i = 0; i < args.length; i++) {
@@ -395,6 +392,18 @@ function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]
 					break;
 				}
 			}
+		},
+		_isEmpty(partition) {
+			for (const prop in partition) {
+				if (this._hasOwn(partition, prop)) {
+					return false;
+				}
+			}
+
+			return true;
+		},
+		_hasOwn(partition, key) {
+			return Object.prototype.hasOwnProperty.call(partition, key);
 		},
 	};
 }
