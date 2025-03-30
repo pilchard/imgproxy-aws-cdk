@@ -40,7 +40,7 @@ export const signingTestData: {
 		viewer: { ip: "1.2.3.4" },
 		request: {
 			method: "GET",
-			uri: "/unsigned/rs:fill:300:400:0/preset:square/w:10/aHR0cHM6Ly9tLm1l/ZGlhLWFtYXpvbi5j/b20vaW1hZ2VzL00v/TVY1Qk1tUTNabVk0/TnpZdFkyVm1ZaTAw/WkRSbUxUZ3lPREF0/WldZelpqaGxOemsx/TnpVMlhrRXlYa0Zx/Y0dkZVFYVnlOVGMz/TWpVek5USUAuanBn",
+			uri: "/unsigned/rs:fill:300:400:0/preset:square/w:10/plain/https://domain.com/images/image.jgp",
 			headers: { host: { value: "https://test.local" }, accept: { value: "image/*" } },
 			querystring: {},
 			cookies: {},
@@ -49,7 +49,7 @@ export const signingTestData: {
 	config: configSigningDisabled,
 	expected: {
 		method: "GET",
-		uri: "/unsigned/rt:fill/w:300/h:400/el:0/pr:square/w:10/aHR0cHM6Ly9tLm1l/ZGlhLWFtYXpvbi5j/b20vaW1hZ2VzL00v/TVY1Qk1tUTNabVk0/TnpZdFkyVm1ZaTAw/WkRSbUxUZ3lPREF0/WldZelpqaGxOemsx/TnpVMlhrRXlYa0Zx/Y0dkZVFYVnlOVGMz/TWpVek5USUAuanBn",
+		uri: "/unsigned/rt:fill/w:300/h:400/el:0/pr:square/w:10/plain/https://domain.com/images/image.jgp",
 		querystring: {},
 		headers: { host: { value: "https://test.local" }, accept: { value: "image/*" } },
 		cookies: {},

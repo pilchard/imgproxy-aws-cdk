@@ -58,27 +58,29 @@ const imgproxyProcessingOptions: ImgproxyOption[] = [
 ];
 
 export function writeOptionsToJson() {
-	const [indexedOptions, optionPriority] = indexOptions(imgproxyProcessingOptions);
+	const { indexedOptions, optionPriority } = indexOptions(imgproxyProcessingOptions);
 	writeFileSync("./functions/url-rewrite/imgproxy-indexed-options.json", JSON.stringify(indexedOptions), "utf8");
 	writeFileSync("./functions/url-rewrite/imgproxy-option-priority.json", JSON.stringify(optionPriority), "utf8");
 }
 
-export function indexOptions(optionsArr: ImgproxyOption[]): [Record<string, ImgproxyOption>, string[]] {
+export function indexOptions(
+	optionsArr: ImgproxyOption[],
+): { indexedOptions: Record<string, ImgproxyOption>; optionPriority: string[]; } {
 	const indexedOptions: Record<string, ImgproxyOption> = {};
 	const optionPriority: string[] = [];
-	for (let i = 0; i < optionsArr.length; i++) {
-		const option = optionsArr[i];
+
+	for (const option of optionsArr) {
 		optionPriority.push(option.short);
-		const labelKeys = ["full", "short", "alt"] as const;
-		for (let j = 0; j < labelKeys.length; j++) {
-			const indexKey = option[labelKeys[j]];
+
+		for (const keyLabel of ["full", "short", "alt"] as const) {
+			const indexKey = option[keyLabel];
 			if (indexKey !== undefined) {
 				indexedOptions[indexKey] = option;
 			}
 		}
 	}
 
-	return [indexedOptions, optionPriority];
+	return { indexedOptions, optionPriority };
 }
 
 export default indexOptions(imgproxyProcessingOptions);

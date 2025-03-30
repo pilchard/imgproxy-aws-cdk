@@ -16,27 +16,17 @@ import type {
 	CloudFrontKvsHandle,
 } from "@pilchard/aws-cloudfront-function";
 import type { Option } from "../utility";
-import type { ImgproxyMetaOption, ImgproxyOption, ImgproxyStdOption } from "./imgproxy-option-data.ts";
 
-export type MergeAction = "overwrite" | "merge" | "concat" | "concat_global";
-export type MergeOptions = { action: MergeAction; gravityOffset?: number; };
-export type Partition = {
-	_result: OptionPartition[];
-	_seen: Record<string, number>;
-	_current: OptionPartition;
-	_global: OptionPartition;
-	result: string;
-	insert: (option: ImgproxyOption, args: string[]) => void;
-	part: (option: ImgproxyOption, args: string[]) => void;
-	cycle: () => void;
-	end: () => void;
-	_stringify: (partition: OptionPartition) => string;
-	_normalize: (optKey: string, args: string[]) => string[];
-	// utility
-	_isEmpty: (partition: Record<string, unknown>) => boolean;
-	_hasOwn: (partition: Record<string, unknown>, key: string) => boolean;
-};
-export type OptionPartition = Record<string, string[]>;
+export interface ImgproxyStdOption {
+	full: string;
+	short: string;
+	alt?: string;
+	caseSensitive?: boolean;
+}
+export interface ImgproxyMetaOption extends ImgproxyStdOption {
+	metaOptions: string[];
+}
+export type ImgproxyOption = ImgproxyStdOption | ImgproxyMetaOption;
 export type LogLevel = "none" | "error" | "warn" | "info" | "debug";
 
 export type UrlRewriteConfig = {
@@ -97,14 +87,22 @@ const imgproxyProcessingOptions: ImgproxyOption[] = [
 	{ full: "max_animation_frame_resolution", short: "mafr" },
 ];
 
-const getOption = (label: string) =>
-	imgproxyProcessingOptions.find((option) => option.full === label || option.short === label || option.alt === label);
+const indexedOptions: Record<string, ImgproxyOption> = ((optionsArr: ImgproxyOption[]) => {
+	const indexedOptions: Record<string, ImgproxyOption> = {};
 
-// const optionPriority = imgproxyProcessingOptions.map((o) => o.short);
+	for (let i = 0; i < optionsArr.length; i++) {
+		const option = optionsArr[i];
 
-// function optionPriorityOrder(a: [string, string[]], b: [string, string[]]) {
-// 	return optionPriority.indexOf(a[0]) - optionPriority.indexOf(b[0]);
-// }
+		const labelKeys = ["full", "short", "alt"] as const;
+		for (let j = 0; j < labelKeys.length; j++) {
+			const indexKey = option[labelKeys[j]];
+			if (indexKey !== undefined) {
+				indexedOptions[indexKey] = option;
+			}
+		}
+	}
+	return indexedOptions;
+})(imgproxyProcessingOptions);
 
 /**
  * G L O B A L S
@@ -148,7 +146,9 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 	logLine("Config fetched from kvs", "info");
 
 	const config = Object.assign(defaultConfig, kvsResponse.some as UrlRewriteConfig);
+
 	logLine(`Fetched config: ${JSON.stringify(config)}`, "debug");
+
 	// update globals
 	LOG_LEVEL = resolveLogLevel(config.log_level);
 	ARGS_SEP = config.imgproxy_arguments_separator;
@@ -182,7 +182,7 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 	logLine("parsing uri", "info");
 
 	const imgproxyUriRegexp = new RegExp(
-		`^\\/([^\\/]+)\\/((?:[a-zA-Z_]+\\${ARGS_SEP}[^\\/]+\\/)+)?(plain\\/|enc\\/)?(.+)`,
+		`^\\/([^\\/]+)\\/((?:[a-zA-Z_]+\\${ARGS_SEP}[^\\/]+\\/)+)?(?:(?:(plain\\/[^@]+)@?)|(?:([a-zA-Z0-9-_\\/]+)\\.?))(\\w+)?$`,
 		"g",
 	);
 
@@ -211,15 +211,22 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 
 	const signature = uriRegexpResult[1];
 	const processingOptionsString = uriRegexpResult[2] ?? "";
-	const sourceUrlType = uriRegexpResult[3] ?? "";
-	const sourceUrl = uriRegexpResult[4] ?? "";
+	const plainSourceUrl = uriRegexpResult[3];
+	const encodedSourceUrl = uriRegexpResult[4];
+	const format = uriRegexpResult[5];
+
+	const sourceUrl = plainSourceUrl ?? encodedSourceUrl;
+
+	if (sourceUrl === undefined) {
+		return sendError(400, "Bad Request", "", new Error("Source URL missing"));
+	}
 
 	if (signingEnabled && !config.imgproxy_trusted_signatures.includes(signature)) {
 		try {
 			validateSignature(
 				signature,
 				IMGPROXY_SALT,
-				`/${processingOptionsString}${sourceUrlType}${sourceUrl}`,
+				`/${processingOptionsString}${sourceUrl}`,
 				IMGPROXY_KEY,
 				IMGPROXY_SIGNATURE_SIZE,
 			);
@@ -235,6 +242,17 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 
 	logLine("normalizing options", "info");
 
+	const optionStrings = processingOptionsString.split(PATH_SEP).map((e) => e.split(ARGS_SEP)).filter((e) =>
+		e.length >= 2
+	);
+
+	if (format !== undefined) {
+		optionStrings.push(["format", format]);
+	}
+
+	logLine(`option_strings: ${JSON.stringify(optionStrings)}`, "info");
+
+	const result = [];
 	const _stringify = (option: ImgproxyStdOption, args: string[]) => {
 		const normalizedArgs = args.map((a) =>
 			(a === "t" || a === "true")
@@ -247,23 +265,17 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 		);
 		return option.short + ARGS_SEP + normalizedArgs.join(ARGS_SEP);
 	};
-
-	const optionStrings = processingOptionsString.split(PATH_SEP).map((e) => e.split(ARGS_SEP)).filter((e) =>
-		e.length >= 2
-	);
-
-	logLine(`option_strings: ${JSON.stringify(optionStrings)}`, "info");
-
-	const result = [];
 	for (let i = 0; i < optionStrings.length; i++) {
 		const optionArr = optionStrings[i];
-		const option = getOption(optionArr[0].toLowerCase());
+		// const option = getOption(optionArr[0].toLowerCase());
+		const option = indexedOptions[optionArr[0].toLowerCase()];
 		if (option !== undefined) {
 			const args = optionArr.slice(1);
 			if ((<ImgproxyMetaOption> option).metaOptions !== undefined) {
 				const metaOptions = (<ImgproxyMetaOption> option).metaOptions;
 				for (let j = 0; j < metaOptions.length; j++) {
-					const metaOption = getOption(metaOptions[j]);
+					// const metaOption = getOption(metaOptions[j]);
+					const metaOption = indexedOptions[metaOptions[j]];
 					if (metaOption !== undefined) {
 						if (j < args.length) {
 							const metaOptionArgs = j === metaOptions.length - 1 ? args.slice(j) : [args[j]];
@@ -272,19 +284,18 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 					}
 				}
 			} // expand meta-options
-
 			else {
 				result.push(_stringify(option, args));
 			} // insert
 		}
 	}
 
-	const normalizedOptionsString = result.join("/");
+	const normalizedOptionsString = result.length ? `/${result.join(PATH_SEP)}` : "";
 
 	logLine("normalized parsed options", "info");
 	logLine(`normalized_option_string: ${normalizedOptionsString}`, "debug");
 
-	const newImgproxyPath = `/${normalizedOptionsString}/${sourceUrlType}${sourceUrl}`;
+	const newImgproxyPath = `${normalizedOptionsString}/${sourceUrl}`;
 	const newSignature = signingEnabled
 		? _sign(IMGPROXY_SALT, newImgproxyPath, IMGPROXY_KEY, IMGPROXY_SIGNATURE_SIZE)
 		: signature;
@@ -300,122 +311,6 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 
 	return request;
 };
-
-/**
- * P A R T I T I O N
- */
-// function createPartition(sortOrder: (a: [string, string[]], b: [string, string[]]) => number): Partition {
-// 	return {
-// 		_result: [],
-// 		_current: Object.create(null),
-// 		_global: {},
-// 		_seen: {},
-// 		get result() {
-// 			return this._result.reverse().map((opt) => this._stringify(opt)).join(PATH_SEP);
-// 		},
-// 		_normalize(optKey, args) {
-// 			return args.map((a) =>
-// 				(a === "t" || a === "true")
-// 					? "1"
-// 					: (a === "f" || a === "false")
-// 					? "0"
-// 					: caseSensitiveOptions.includes(optKey)
-// 					? a
-// 					: a.toLowerCase()
-// 			);
-// 		},
-// 		_stringify(partition) {
-// 			return Object.entries(partition).sort(sortOrder).map((e) =>
-// 				e[0] + ARGS_SEP + this._normalize(e[0], e[1]).join(ARGS_SEP)
-// 			).join(PATH_SEP);
-// 		},
-// 		cycle() {
-// 			if (!this._isEmpty(this._current)) {
-// 				this._result.push(this._current);
-// 				this._current = Object.create(null);
-// 			}
-// 		},
-// 		end() {
-// 			if (!this._isEmpty(this._current)) {
-// 				this._result.push(this._current);
-// 			}
-// 			if (!this._isEmpty(this._global)) {
-// 				this._result.push(this._global);
-// 			}
-// 		},
-// 		part(option, args) {
-// 			this.cycle();
-
-// 			const optionKey = option.short;
-// 			const prev = this._result[this._result.length - 1];
-// 			if (prev && this._hasOwn(prev, optionKey)) {
-// 				prev[optionKey] = args.concat(prev[optionKey]);
-// 			} else {
-// 				this._result.push({ [optionKey]: args });
-// 			}
-// 		},
-// 		insert(option, args) {
-// 			const optionKey = option.short;
-
-// 			const mergeOptions: MergeOptions = option.merge === undefined
-// 				? { action: "overwrite" }
-// 				: (typeof option.merge === "string")
-// 				? { action: option.merge }
-// 				: option.merge;
-
-// 			switch (mergeOptions.action) {
-// 				case "overwrite": {
-// 					if (!this._hasOwn(this._seen, optionKey)) {
-// 						this._current[optionKey] = args;
-// 						this._seen[optionKey] = 1;
-// 					}
-// 					break;
-// 				}
-// 				case "concat": {
-// 					this._current[optionKey] = args.concat(this._current[optionKey] || []);
-// 					break;
-// 				}
-// 				case "concat_global": {
-// 					this._global[optionKey] = args.concat(this._global[optionKey] || []);
-// 					break;
-// 				}
-// 				case "merge": {
-// 					const gOffset = mergeOptions.gravityOffset;
-// 					const isOverwritingGravityOption = gOffset !== undefined
-// 						&& (args[gOffset] === "sm" || args[gOffset] === "fp");
-
-// 					if (!this._hasOwn(this._seen, optionKey)) {
-// 						this._current[optionKey] = this._current[optionKey] || [];
-// 						const current = this._current[optionKey];
-// 						for (let i = 0; i < args.length; i++) {
-// 							if (current[i] === undefined || current[i] === "") {
-// 								current[i] = args[i];
-// 							}
-// 						}
-// 					}
-
-// 					if (isOverwritingGravityOption) {
-// 						this._seen[optionKey] = 1;
-// 					}
-
-// 					break;
-// 				}
-// 			}
-// 		},
-// 		_isEmpty(partition) {
-// 			for (const prop in partition) {
-// 				if (this._hasOwn(partition, prop)) {
-// 					return false;
-// 				}
-// 			}
-
-// 			return true;
-// 		},
-// 		_hasOwn(partition, key) {
-// 			return Object.prototype.hasOwnProperty.call(partition, key);
-// 		},
-// 	};
-// }
 
 /**
  * K E Y  V A L U E  S T O R E
@@ -483,6 +378,23 @@ function logLine(logline: any, level: LogLevel) {
 }
 
 /**
+ * E R R O R
+ */
+
+function sendError(statusCode: number, statusText: string, body: string, error: Error) {
+	logLine(body, "error");
+	logLine(error, "error");
+	const resonse: AWSCloudFrontFunction.FunctionEventResponse = {
+		statusCode: statusCode,
+		statusDescription: statusText,
+		body: body,
+		headers: {},
+		cookies: {},
+	};
+	return resonse;
+}
+
+/**
  * D E B U G
  */
 
@@ -504,20 +416,3 @@ function logLine(logline: any, level: LogLevel) {
 // 		}),
 // 	};
 // }
-
-/**
- * E R R O R
- */
-
-function sendError(statusCode: number, statusText: string, body: string, error: Error) {
-	logLine(body, "error");
-	logLine(error, "error");
-	const resonse: AWSCloudFrontFunction.FunctionEventResponse = {
-		statusCode: statusCode,
-		statusDescription: statusText,
-		body: body,
-		headers: {},
-		cookies: {},
-	};
-	return resonse;
-}
