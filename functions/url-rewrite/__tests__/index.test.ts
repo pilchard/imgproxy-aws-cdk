@@ -32,3 +32,7 @@ test.each(stdOptionTestData)("std_option: $label", async ({ event, config, expec
 	expect(reqres).toHaveProperty("uri");
 	expect((<AWSCloudFrontFunction.FunctionEventRequest> reqres).uri).toBe(expected.uri);
 });
+
+test("throws on pineapples", async () => {
+	await expect(() => getAsyncFruitStock()).rejects.toThrowError("empty");
+});
