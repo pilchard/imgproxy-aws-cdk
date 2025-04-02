@@ -169,12 +169,6 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 	// 	"debug" in request.headers &&
 	// 	request.headers.debug.value === "true";
 
-	const signingEnabled = !!(IMGPROXY_KEY.length && IMGPROXY_SALT.length);
-
-	if (!signingEnabled) {
-		logLine("Signing: imgproxy signing disabled", "warn");
-	}
-
 	const request = event.request;
 	const requestUri = request.uri;
 
@@ -182,8 +176,8 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 	logLine("parsing uri", "info");
 
 	const imgproxyUriRegexp = new RegExp(
-		`^\\/([^\\/]+)\\/((?:[a-zA-Z_]+\\${ARGS_SEP}[^\\/]+\\/)+)?(?:(?:(plain\\/[^@]+)@?)|(?:([a-zA-Z0-9-_\\/]+)\\.?))(\\w+)?$`,
-		"g",
+		`^\\/([a-zA-Z0-9-_]+)\\/((?:[a-zA-Z_]+\\${ARGS_SEP}[^\\/]+\\/)+)?(?:(?:(plain\\/[^@]+)(?:\\@(\\w+))?)|(?:([a-zA-Z0-9-_\\/]+)(?:\\.(\\w+))?))$`,
+		"ig",
 	);
 
 	const uriRegexpResult = imgproxyUriRegexp.exec(requestUri);
@@ -194,16 +188,7 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 		// 	setDebugInfo(res, requestUri, undefined, signingEnabled);
 		// }
 		// return res;
-		return sendError(403, "Forbidden", "", new Error("Unable to parse URI"));
-	}
-
-	if (uriRegexpResult[1] === undefined) {
-		// const res = sendError(403, "Forbidden", "", new Error("Signature is missing from URI"));
-		// if (debugRequest) {
-		// 	setDebugInfo(res, requestUri, undefined, signingEnabled);
-		// }
-		// return res;
-		return sendError(403, "Forbidden", "", new Error("Unable to parse URI"));
+		return sendError(400, "Bad Request", "Unable to parse URI", new Error("Unable to parse URI"));
 	}
 
 	logLine("uri parsing successful", "info");
@@ -212,16 +197,23 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 	const signature = uriRegexpResult[1];
 	const processingOptionsString = uriRegexpResult[2] ?? "";
 	const plainSourceUrl = uriRegexpResult[3];
-	const encodedSourceUrl = uriRegexpResult[4];
-	const format = uriRegexpResult[5];
+	const plainSourceFormat = uriRegexpResult[4];
+	const encodedSourceUrl = uriRegexpResult[5];
+	const encodedSourceformat = uriRegexpResult[6];
 
 	const sourceUrl = plainSourceUrl ?? encodedSourceUrl;
+	const format = plainSourceFormat ?? encodedSourceformat;
 
 	if (sourceUrl === undefined) {
-		return sendError(400, "Bad Request", "", new Error("Source URL missing"));
+		return sendError(400, "Bad Request", "Source URL missing", new Error("Source URL missing"));
 	}
+	const trustedSignature = config.imgproxy_trusted_signatures.includes(signature);
+	const signingEnabled = !!(IMGPROXY_KEY.length && IMGPROXY_SALT.length);
 
-	if (signingEnabled && !config.imgproxy_trusted_signatures.includes(signature)) {
+	if (!signingEnabled) {
+		logLine("Signing: imgproxy signing disabled", "warn");
+	}
+	if (signingEnabled && !trustedSignature) {
 		try {
 			validateSignature(
 				signature,
@@ -236,7 +228,12 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 			// 	setDebugInfo(res, requestUri, undefined, signingEnabled);
 			// }
 			// return res;
-			return sendError(403, "Forbidden", "", new Error("Signature verification failed"));
+			return sendError(
+				403,
+				"Forbidden",
+				"Signature verification failed",
+				new Error("Signature verification failed"),
+			);
 		}
 	}
 
@@ -277,7 +274,7 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 					// const metaOption = getOption(metaOptions[j]);
 					const metaOption = indexedOptions[metaOptions[j]];
 					if (metaOption !== undefined) {
-						if (j < args.length) {
+						if (j < args.length && args[j] !== "") {
 							const metaOptionArgs = j === metaOptions.length - 1 ? args.slice(j) : [args[j]];
 							result.push(_stringify(metaOption, metaOptionArgs));
 						}
@@ -296,7 +293,7 @@ export const handler: AWSCloudFrontFunction.RequestEventHandler = async function
 	logLine(`normalized_option_string: ${normalizedOptionsString}`, "debug");
 
 	const newImgproxyPath = `${normalizedOptionsString}/${sourceUrl}`;
-	const newSignature = signingEnabled
+	const newSignature = signingEnabled && !trustedSignature
 		? _sign(IMGPROXY_SALT, newImgproxyPath, IMGPROXY_KEY, IMGPROXY_SIGNATURE_SIZE)
 		: signature;
 	const resultUri = `/${newSignature}${newImgproxyPath}`;

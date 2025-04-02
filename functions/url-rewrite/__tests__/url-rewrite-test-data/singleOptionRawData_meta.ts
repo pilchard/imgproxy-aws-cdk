@@ -80,6 +80,18 @@ export const metaOptionRawData: [string, string[], string[]][] = [
 	["rs", ["rs:fill:100:200:true:true:noea:1:2"], ["rt:fill", "w:100", "h:200", "el:1", "ex:1:noea:1:2"]],
 	["rs", ["rs:fill-down:100:200:f:f:ce"], ["rt:fill-down", "w:100", "h:200", "el:0", "ex:0:ce"]],
 	["rs", ["rs:auto:100:200:t:t:we:1:0.2"], ["rt:auto", "w:100", "h:200", "el:1", "ex:1:we:1:0.2"]],
+	// `resize` partial
+	["resize -fit", ["resize::100:200:0:0:no:0.1:0.2"], ["w:100", "h:200", "el:0", "ex:0:no:0.1:0.2"]],
+	["resize -w", ["resize:fill::200:1:1:no:0.1:0.2"], ["rt:fill", "h:200", "el:1", "ex:1:no:0.1:0.2"]],
+	["resize -h", ["resize:fit:100::false:false:noea:1:2"], ["rt:fit", "w:100", "el:0", "ex:0:noea:1:2"]],
+	["resize -el", ["resize:fill:100:200::true:noea:1:2"], ["rt:fill", "w:100", "h:200", "ex:1:noea:1:2"]],
+	["resize -ex", ["resize:fill-down:100:200:f::ce"], ["rt:fill-down", "w:100", "h:200", "el:0"]],
+	// `rs` partial
+	["rs -fit", ["rs::100:200:0:0:no:0.1:0.2"], ["w:100", "h:200", "el:0", "ex:0:no:0.1:0.2"]],
+	["rs -w", ["rs:fill::200:1:1:no:0.1:0.2"], ["rt:fill", "h:200", "el:1", "ex:1:no:0.1:0.2"]],
+	["rs -h", ["rs:fit:100::false:false:noea:1:2"], ["rt:fit", "w:100", "el:0", "ex:0:noea:1:2"]],
+	["rs -el", ["rs:fill:100:200::true:noea:1:2"], ["rt:fill", "w:100", "h:200", "ex:1:noea:1:2"]],
+	["rs -ex", ["rs:fill-down:100:200:f::ce"], ["rt:fill-down", "w:100", "h:200", "el:0"]],
 	/**
 	 * Size - meta-option
 	 *
@@ -88,7 +100,7 @@ export const metaOptionRawData: [string, string[], string[]][] = [
 	 *
 	 * This is a meta-option that defines the width, height, enlarge, and extend. All arguments are optional and can be omitted to use their default values.
 	 */
-	// `size
+	// `size`
 	["size", ["size:100:200:0:0:no:0.1:0.2"], ["w:100", "h:200", "el:0", "ex:0:no:0.1:0.2"]],
 	["size", ["size:100:200:1:1:no:0.1:0.2"], ["w:100", "h:200", "el:1", "ex:1:no:0.1:0.2"]],
 	["size", ["size:100:200:false:false:noea:1:2"], ["w:100", "h:200", "el:0", "ex:0:noea:1:2"]],
@@ -102,4 +114,19 @@ export const metaOptionRawData: [string, string[], string[]][] = [
 	["s", ["s:100:200:true:true:noea:1:2"], ["w:100", "h:200", "el:1", "ex:1:noea:1:2"]],
 	["s", ["s:100:200:f:f:ce"], ["w:100", "h:200", "el:0", "ex:0:ce"]],
 	["s", ["s:100:200:t:t:we:1:0.2"], ["w:100", "h:200", "el:1", "ex:1:we:1:0.2"]],
+	// `size` partial
+	["size -w", ["size::100:0:0:no:0.1:0.2"], ["h:100", "el:0", "ex:0:no:0.1:0.2"]],
+	["size -h", ["size:100::0:0:no:0.1:0.2"], ["w:100", "el:0", "ex:0:no:0.1:0.2"]],
+	["size -el", ["size:100:200::1:no:0.1:0.2"], ["w:100", "h:200", "ex:1:no:0.1:0.2"]],
+	["size -ex", ["size:100:200:false::noea:1:2"], ["w:100", "h:200", "el:0"]],
+	["size ex-partial", ["size:100:200:true:true::1:2"], ["w:100", "h:200", "el:1", "ex:1::1:2"]],
+	["size ex-partial", ["size:100:200:true:true:ea::2"], ["w:100", "h:200", "el:1", "ex:1:ea::2"]],
+	["size ex-partial", ["size:100:200:true:true:ea:1"], ["w:100", "h:200", "el:1", "ex:1:ea:1"]],
+	// `s` partial
+	["s -h", ["s:100::0:0:no:0.1:0.2"], ["w:100", "el:0", "ex:0:no:0.1:0.2"]],
+	["s -el", ["s:100:200::1:no:0.1:0.2"], ["w:100", "h:200", "ex:1:no:0.1:0.2"]],
+	["s -ex", ["s:100:200:false::noea:1:2"], ["w:100", "h:200", "el:0"]],
+	["s ex-partial", ["s:100:200:true:true::1:2"], ["w:100", "h:200", "el:1", "ex:1::1:2"]],
+	["s ex-partial", ["s:100:200:true:true:ea::2"], ["w:100", "h:200", "el:1", "ex:1:ea::2"]],
+	["s ex-partial", ["s:100:200:true:true:ea:1"], ["w:100", "h:200", "el:1", "ex:1:ea:1"]],
 ];
