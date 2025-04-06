@@ -9,13 +9,12 @@ import type { AwsEnvStackProps } from "../lib/imgproxy-stack";
 const config = getConfig();
 const stackProps: AwsEnvStackProps = {
 	env: {
-		account: process.env.CDK_DEPLOY_ACCOUNT || process.env.CDK_DEFAULT_ACCOUNT || "specify_account",
-		region: process.env.CDK_DEPLOY_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1",
+		account: config.CDK_DEPLOY_ACCOUNT || process.env.CDK_DEFAULT_ACCOUNT || "specify_account",
+		region: config.CDK_DEPLOY_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1",
 	},
 	config: getConfig(),
 };
 
-const app = new cdk.App();
 /**
  * @see: https://yshen4.github.io/infrastructure/AWS/CDK_context.html
  *
@@ -39,5 +38,7 @@ const app = new cdk.App();
  * // 	},
  * // });
  */
+
+const app = new cdk.App();
 
 new ImgproxyStack(app, config.STACK_NAME, stackProps);

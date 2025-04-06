@@ -11,17 +11,25 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 // Stack Parameters
 export const getConfig = (): ConfigProps => {
-	const baseName = "imgproxy";
+	// defaults
+	const baseName = process.env.CDK_STACK_BASE_NAME || "imgproxy";
 	const stackNameDefault = `${baseName}-stack`;
 	const lambdaFunctionNameDefault = `${stackNameDefault}_${baseName}-lamdba`;
 	const lambdaEcrRepositoryNameDefault = baseName;
 
+	// computed
+	const stackName = process.env.CDK_STACK_NAME || stackNameDefault;
+	const ssmBasePath = process.env.SYSTEMS_MANAGER_PARAMETERS_BASE_PATH || stackName;
+	const ssmEndpoint = process.env.SYSTEMS_MANAGER_PARAMETERS_ENDPOINT;
+	const ssmParametersPath = ssmEndpoint ? `${ssmBasePath}/${ssmEndpoint}` : ssmBasePath;
 	return {
 		// STACK
-		STACK_NAME: process.env.CDK_STACK_NAME || stackNameDefault,
+		STACK_NAME: stackName,
+		CDK_STACK_BASE_NAME: baseName,
+		CDK_DEPLOY_ACCOUNT: process.env.CDK_DEPLOY_ACCOUNT,
+		CDK_DEPLOY_REGION: process.env.CDK_DEPLOY_REGION,
 
 		// IMGPROXY
-		ENABLE_PRO_OPTIONS: parseBoolean(process.env.ENABLE_PRO_OPTIONS) ?? false,
 		ENABLE_URL_SIGNING: parseBoolean(process.env.ENABLE_URL_SIGNING) ?? true,
 		// LAMBDA
 		LAMBDA_FUNCTION_NAME: process.env.IMGPROXY_FUNCTION_NAME || lambdaFunctionNameDefault,
@@ -30,7 +38,7 @@ export const getConfig = (): ConfigProps => {
 		LAMBDA_MEMORY_SIZE: parseNumber(process.env.IMGPROXY_MEMORY_SIZE, 2048),
 		LAMBDA_TIMEOUT: parseNumber(process.env.IMGPROXY_TIMEOUT, 60),
 		// SSM
-		SYSTEMS_MANAGER_PARAMETERS_BASE_PATH: process.env.SYSTEMS_MANAGER_PARAMETERS_PATH || process.env.STACK_NAME || stackNameDefault,
+		SYSTEMS_MANAGER_PARAMETERS_PATH: ssmParametersPath,
 		// S3
 		S3_CREATE_DEFAULT_BUCKETS: parseBoolean(process.env.S3_CREATE_DEFAULT_BUCKETS) ?? false,
 		S3_CREATE_BUCKETS: parseArray(process.env.S3_CREATE_BUCKETS),
@@ -40,9 +48,12 @@ export const getConfig = (): ConfigProps => {
 		S3_CLIENT_SIDE_DECRYPTION: parseBoolean(process.env.S3_CLIENT_SIDE_DECRYPTION) ?? false,
 		// CLOUDFRONT
 		CREATE_CLOUD_FRONT_DISTRIBUTION: parseBoolean(process.env.CREATE_CLOUD_FRONT_DISTRIBUTION) ?? true,
-		CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION: parseBoolean(process.env.CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION) ?? true,
+		CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION: parseBoolean(process.env.CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION)
+			?? true,
 		ENABLE_STATIC_ORIGIN: parseBoolean(process.env.CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION) ?? true,
-		CLOUDFRONT_ORIGIN_SHIELD_REGION: getOriginShieldRegion(process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1"),
+		CLOUDFRONT_ORIGIN_SHIELD_REGION: getOriginShieldRegion(
+			process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1",
+		),
 		CLOUDFRONT_CORS_ENABLED: parseBoolean(process.env.CLOUDFRONT_CORS_ENABLED) ?? true,
 		// SAMPLE
 		DEPLOY_SAMPLE_WEBSITE: parseBoolean(process.env.DEPLOY_SAMPLE_WEBSITE) ?? false,
@@ -93,6 +104,9 @@ export type ConfigProps = {
 	 * The name of the deployed AWS stack.
 	 */
 	readonly STACK_NAME: string;
+	readonly CDK_STACK_BASE_NAME: string;
+	readonly CDK_DEPLOY_ACCOUNT?: string | undefined;
+	readonly CDK_DEPLOY_REGION?: string | undefined;
 
 	// I M G P R O X Y
 	//
@@ -101,11 +115,6 @@ export type ConfigProps = {
 	 * @default true
 	 */
 	readonly ENABLE_URL_SIGNING: boolean;
-	/**
-	 * Enable imgproxy `PRO` options. If false and url-rewrite is enabled pro options will be stripped from the processing URI
-	 * @default false
-	 */
-	readonly ENABLE_PRO_OPTIONS: boolean;
 
 	// A W S
 	//
@@ -138,10 +147,10 @@ export type ConfigProps = {
 
 	// SSM
 	/**
-	 * A path of AWS Systems Manager Parameter Store parameters that should be loaded as environment variables. The path should _NOT_ start with a slash (/) nor should it have a slash (/) at the end. For example, if you want to load the `IMGPROXY_KEY` variable from the `/imgproxy/prod/IMGPROXY_KEY` parameter, the value should be `imgproxy/prod`. If not set, imgproxy will load environment variables from the `/${StackName}` path.
-	 * @default STACK_NAME
+	 * A path of AWS Systems Manager Parameter Store parameters that should be loaded as environment variables. The path should _NOT_ start with a slash (/) nor should it have a slash (/) at the end. For example, if you want to load the `IMGPROXY_KEY` variable from the `/imgproxy/prod/IMGPROXY_KEY` parameter, the value should be `imgproxy/prod`. If not set, imgproxy will load environment variables from the `/${StackName}/imgproxy` path.
+	 * @default $STACK_NAME
 	 */
-	readonly SYSTEMS_MANAGER_PARAMETERS_BASE_PATH: string;
+	readonly SYSTEMS_MANAGER_PARAMETERS_PATH: string;
 
 	// S3
 	/**
@@ -185,7 +194,7 @@ export type ConfigProps = {
 	 * Create a CloudFront function that rewrites the incoming URL to maximize cache hits?
 	 * @default true
 	 */
-	readonly CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION: boolean;
+	readonly CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION: boolean;
 	/**
 	 * If `true` a second CloudFront S3 origin will be created and paths starting with `"/static/*"` will be routed to it.
 	 * @default true

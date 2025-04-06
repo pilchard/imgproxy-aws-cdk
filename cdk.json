@@ -1,5 +1,5 @@
 {
-	"app": "npx ts-node --prefer-ts-exts bin/imgproxy.ts",
+	"app": "npx tsx bin/imgproxy.ts",
 	"watch": {
 		"include": ["**"],
 		"exclude": [
