@@ -1,6 +1,3 @@
-// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-// SPDX-License-Identifier: MIT-0
-
 import {
 	aws_cloudfront as cloudfront,
 	aws_cloudfront_origins as origins,
@@ -10,6 +7,7 @@ import {
 	aws_logs as logs,
 	aws_s3 as s3,
 	aws_s3_deployment as s3deploy,
+	aws_ssm as ssm,
 	CfnOutput,
 	Duration,
 	Fn,
@@ -20,7 +18,7 @@ import {
 import type { StackProps } from "aws-cdk-lib";
 import type { CfnDistribution, ICachePolicy } from "aws-cdk-lib/aws-cloudfront";
 import type { Construct } from "constructs";
-import type { ConfigProps } from "./config";
+import type { ConfigProps } from "../bin/config";
 
 export type ImgproxyLambdaEnv = {
 	PORT: string;
@@ -68,6 +66,7 @@ export class ImgproxyStack extends Stack {
 				LAMBDA_ARCHITECTURE,
 				LAMBDA_MEMORY_SIZE,
 				LAMBDA_TIMEOUT,
+				LAMBDA_SSM_PARAMETERS,
 				/** S S M */
 				SYSTEMS_MANAGER_PARAMETERS_PATH,
 				/** S 3 */
@@ -78,10 +77,12 @@ export class ImgproxyStack extends Stack {
 				S3_MULTI_REGION,
 				S3_CLIENT_SIDE_DECRYPTION,
 				/** C L O U D F R O N T */
-				CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION,
 				CREATE_CLOUD_FRONT_DISTRIBUTION,
 				CLOUDFRONT_ORIGIN_SHIELD_REGION,
 				CLOUDFRONT_CORS_ENABLED,
+				/** C L O U D F R O N T  F U N C T I O N*/
+				CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION,
+				URL_REWRITE_CLOUD_FRONT_FUNCTION_CONFIG,
 				/** S A M P L E */
 				DEPLOY_SAMPLE_WEBSITE,
 			},
@@ -94,8 +95,7 @@ export class ImgproxyStack extends Stack {
 
 		// Default
 		if (S3_CREATE_DEFAULT_BUCKETS) {
-			const defaultBucket = new s3.Bucket(this, "stack-generated-default-bucket", {
-				bucketName: `${this.stackName.toLocaleLowerCase()}-bucket`,
+			const defaultBucket = new s3.Bucket(this, `${STACK_NAME}_imgproxy-source-bucket`, {
 				removalPolicy: RemovalPolicy.RETAIN,
 				blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 				encryption: s3.BucketEncryption.S3_MANAGED,
@@ -105,8 +105,8 @@ export class ImgproxyStack extends Stack {
 
 			accessibleS3Buckets.push(defaultBucket);
 
-			new CfnOutput(this, "DefaultS3Bucket", {
-				description: "S3 default bucket",
+			new CfnOutput(this, "DefaultS3Buckets", {
+				description: "Generated S3 default buckets",
 				value: defaultBucket.bucketName,
 			});
 		}
@@ -114,7 +114,7 @@ export class ImgproxyStack extends Stack {
 		// Create
 		if (S3_CREATE_BUCKETS.length > 0) {
 			for (const s3BucketName of S3_CREATE_BUCKETS) {
-				const bucketId = `stack-generated-bucket-${s3BucketName}`;
+				const bucketId = `${s3BucketName}_${this.node.addr}`;
 				const bucket = new s3.Bucket(this, bucketId, {
 					bucketName: s3BucketName,
 					removalPolicy: RemovalPolicy.RETAIN,
@@ -127,8 +127,8 @@ export class ImgproxyStack extends Stack {
 				accessibleS3Buckets.push(bucket);
 			}
 
-			new CfnOutput(this, "OriginalImagesS3Bucket", {
-				description: "S3 bucket where original images are stored",
+			new CfnOutput(this, "CreatedS3Buckets", {
+				description: "Created S3 Buckets",
 				value: `Created ${accessibleS3Buckets.length} buckets: [${
 					accessibleS3Buckets.map((o) => o.bucketName).join(", ")
 				}]`,
@@ -284,7 +284,7 @@ export class ImgproxyStack extends Stack {
 			code: lambda.Code.fromEcrImage(
 				ecr.Repository.fromRepositoryArn(
 					this,
-					"imgproxy-ecr-repository",
+					`imgproxy-ecr-repository_${this.node.addr}`,
 					`arn:aws:ecr:${this.region}:${this.account}:repository/${LAMBDA_ECR_REPOSITORY_NAME}`,
 				),
 			),
@@ -299,7 +299,14 @@ export class ImgproxyStack extends Stack {
 			logRetention: logs.RetentionDays.ONE_DAY,
 		};
 
-		const imgproxyLambda = new lambda.Function(this, "imgproxy", imgproxyLambdaProps);
+		const imgproxyLambda = new lambda.Function(this, `imgproxy-lambda_${this.node.addr}`, imgproxyLambdaProps);
+
+		// Configure SSM Parameters for Lambda
+		// @see https://community.aws/content/2lhjUrhqpbrQKNkc6lOevb3qwyU/using-ssm-parameters-in-aws-cdk?lang=en#create-an-ssm-parameter-with-cdk
+		for (const [parameter, value] of Object.entries(LAMBDA_SSM_PARAMETERS)) {
+			const parameterName = `/${SYSTEMS_MANAGER_PARAMETERS_PATH}/${parameter}`;
+			new ssm.StringParameter(this, parameterName, { parameterName: parameterName, stringValue: value });
+		}
 
 		// Enable Lambda URL
 		const imgproxyLambdaURL = imgproxyLambda.addFunctionUrl({
@@ -314,7 +321,7 @@ export class ImgproxyStack extends Stack {
 			// Cache policy
 			const imgproxyCloudFrontCachePolicy = new cloudfront.CachePolicy(
 				this,
-				`ImageCachePolicy${this.node.addr}`,
+				`image_cache_policy_${this.node.addr}`,
 				{
 					defaultTtl: Duration.days(365),
 					maxTtl: Duration.days(365),
@@ -353,35 +360,16 @@ export class ImgproxyStack extends Stack {
 				 * @see https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_cloudfront.KeyValueStore.html
 				 * @see https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_cloudfront.ImportSource.html
 				 */
-				const urlRewritStore = new cloudfront.KeyValueStore(this, "urlRewritStore", {
-					/**
-					 * The unique name of the Key Value Store.
-					 *
-					 * @default A generated name
-					 */
+				const urlRewriteStore = new cloudfront.KeyValueStore(this, "urlRewriteStore", {
 					keyValueStoreName: `${STACK_NAME}_url-rewrite-store`,
-					/**
-					 * A comment for the Key Value Store
-					 *
-					 * @default No comment will be specified
-					 */
-					// comment: string,
-					/**
-					 * The import source for the Key Value Store.
-					 *
-					 * This will populate the initial items in the Key Value Store. The
-					 * source data must be in a valid JSON format.
-					 *
-					 * @default No data will be imported to the store
-					 */
-					// source: ImportSource,
+					source: cloudfront.ImportSource.fromInline(JSON.stringify(URL_REWRITE_CLOUD_FRONT_FUNCTION_CONFIG)),
 				});
 
 				const urlRewriteFunction = new cloudfront.Function(this, "urlRewrite", {
-					functionName: `urlRewrite${this.node.addr}`,
+					functionName: `${STACK_NAME}_url-rewrite`,
 					code: cloudfront.FunctionCode.fromFile({ filePath: ".dist/functions/url-rewrite/index.js" }),
 					runtime: cloudfront.FunctionRuntime.JS_2_0,
-					keyValueStore: urlRewritStore,
+					keyValueStore: urlRewriteStore,
 				});
 
 				imageDeliveryCacheBehaviorConfig.functionAssociations.push({

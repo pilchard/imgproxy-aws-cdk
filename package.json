@@ -25,23 +25,27 @@
 	"scripts": {
 		"watch": "tsc -w",
 		"test": "vitest",
-		"cdk": "cdk",
+		"deploy": "pnpm run build && npm install -g aws-cdk && cdk deploy",
 		"typecheck": "tsc --noEmit",
 		"init-json": "rm -rf functions/url-rewrite/imgproxy-indexed-options.json functions/url-rewrite/imgproxy-option-priority.json && tsx ./functions/url-rewrite/imgproxy-options.ts",
 		"build": "pnpm run typecheck && rm -rf ./.dist && pnpm run build:parcel",
 		"build:parcel": "parcel build"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "1.9.4",
+		"@biomejs/biome": "^1.9.4",
 		"@parcel/config-default": "^2.13.3",
 		"@parcel/plugin": "^2.13.3",
 		"@pilchard/aws-cloudfront-function": "link:../aws-cloudfront-function",
 		"@types/aws-lambda": "^8.10.147",
 		"@types/node": "22.13.5",
+		"@types/prompts": "^2.4.9",
+		"ansis": "^3.17.0",
 		"aws-cdk": "2.1001.0",
 		"cloudfront": "link:functions/url-rewrite/__mocks__/cloudfront",
 		"dotenv": "^16.4.7",
+		"execa": "^9.5.2",
 		"parcel": "^2.13.3",
+		"prompts": "^2.4.2",
 		"ts-node": "^10.9.2",
 		"tsx": "^4.19.3",
 		"typescript": "5.8.2",
@@ -50,9 +54,9 @@
 	},
 	"dependencies": {
 		"aws-cdk-lib": "2.182.0",
+		"cloudfront": "link:functions/url-rewrite/__mocks__/cloudfront",
 		"constructs": "^10.4.2",
-		"source-map-support": "^0.5.21",
-		"cloudfront": "link:functions/url-rewrite/__mocks__/cloudfront"
+		"source-map-support": "^0.5.21"
 	},
 	"packageManager": "pnpm@9.15.4+sha512.b2dc20e2fc72b3e18848459b37359a32064663e5627a51e4c74b2c29dd8e8e0491483c3abb40789cfd578bf362fb6ba8261b05f0387d76792ed6e23ea3b1b6a0"
 }

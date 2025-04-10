@@ -1,24 +1,56 @@
-import path from "node:path";
-import { getOriginShieldRegion } from "./origin-shield.js";
-
 import * as dotenv from "dotenv";
+import { $ } from "execa";
+import { readFileSync } from "node:fs";
+import path, { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getOriginShieldRegion } from "../lib/origin-shield.js";
+
+import type { LogLevel } from "../functions/url-rewrite/index.js";
+import type { UrlRewriteConfig } from "../functions/url-rewrite/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
+// signing setup
+const imgproxySsmEnv = dotenv.parse(readFileSync(resolve(process.cwd(), ".imgproxy.env")));
+
+const hexKey = async (len = 64) => {
+	return (await $`xxd -g 2 -l ${len} -c ${len} -p /dev/urandom`).stdout;
+};
+
+let imgproxyKey = "";
+let imgproxySalt = "";
+
+if (process.env.ENABLE_URL_SIGNING) {
+	imgproxyKey = imgproxySsmEnv.IMGPROXY_KEY || await hexKey();
+	imgproxySalt = imgproxySsmEnv.IMGPROXY_SALT || await hexKey();
+
+	imgproxySsmEnv.IMGPROXY_KEY = imgproxyKey;
+	imgproxySsmEnv.IMGPROXY_SALT = imgproxySalt;
+}
+
+const urlRewriteConfig: UrlRewriteConfig = {
+	imgproxy_salt: imgproxyKey,
+	imgproxy_key: imgproxySalt,
+	imgproxy_signature_size: parseNumber(imgproxySsmEnv.IMGPROXY_SIGNATURE_SIZE) ?? 32,
+	imgproxy_trusted_signatures: parseArray(imgproxySsmEnv.IMGPROXY_TRUSTED_SIGNATURES),
+	imgproxy_arguments_separator: imgproxySsmEnv.IMGPROXY_ARGUMENTS_SEPARATOR || ":",
+	// TODO: make configurable
+	log_level: (<LogLevel> process.env.SYSTEMS_MANAGER_PARAMETERS_ENDPOINT) || "none",
+};
+
 // Stack Parameters
 export const getConfig = (): ConfigProps => {
 	// defaults
-	const baseName = process.env.CDK_STACK_BASE_NAME || "imgproxy";
+	const baseName = process.env.STACK_BASE_NAME || "imgproxy";
 	const stackNameDefault = `${baseName}-stack`;
 	const lambdaFunctionNameDefault = `${stackNameDefault}_${baseName}-lamdba`;
 	const lambdaEcrRepositoryNameDefault = baseName;
 
 	// computed
-	const stackName = process.env.CDK_STACK_NAME || stackNameDefault;
+	const stackName = process.env.STACK_NAME || stackNameDefault;
 	const ssmBasePath = process.env.SYSTEMS_MANAGER_PARAMETERS_BASE_PATH || stackName;
 	const ssmEndpoint = process.env.SYSTEMS_MANAGER_PARAMETERS_ENDPOINT;
 	const ssmParametersPath = ssmEndpoint ? `${ssmBasePath}/${ssmEndpoint}` : ssmBasePath;
@@ -35,8 +67,9 @@ export const getConfig = (): ConfigProps => {
 		LAMBDA_FUNCTION_NAME: process.env.IMGPROXY_FUNCTION_NAME || lambdaFunctionNameDefault,
 		LAMBDA_ECR_REPOSITORY_NAME: process.env.LAMBDA_ECR_REPOSITORY_NAME || lambdaEcrRepositoryNameDefault,
 		LAMBDA_ARCHITECTURE: process.env.IMGPROXY_ARCHITECTURE || "ARM64",
-		LAMBDA_MEMORY_SIZE: parseNumber(process.env.IMGPROXY_MEMORY_SIZE, 2048),
-		LAMBDA_TIMEOUT: parseNumber(process.env.IMGPROXY_TIMEOUT, 60),
+		LAMBDA_MEMORY_SIZE: parseNumber(process.env.IMGPROXY_MEMORY_SIZE) ?? 2048,
+		LAMBDA_TIMEOUT: parseNumber(process.env.IMGPROXY_TIMEOUT) ?? 60,
+		LAMBDA_SSM_PARAMETERS: imgproxySsmEnv,
 		// SSM
 		SYSTEMS_MANAGER_PARAMETERS_PATH: ssmParametersPath,
 		// S3
@@ -48,24 +81,26 @@ export const getConfig = (): ConfigProps => {
 		S3_CLIENT_SIDE_DECRYPTION: parseBoolean(process.env.S3_CLIENT_SIDE_DECRYPTION) ?? false,
 		// CLOUDFRONT
 		CREATE_CLOUD_FRONT_DISTRIBUTION: parseBoolean(process.env.CREATE_CLOUD_FRONT_DISTRIBUTION) ?? true,
-		CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION: parseBoolean(process.env.CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION)
-			?? true,
 		ENABLE_STATIC_ORIGIN: parseBoolean(process.env.CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION) ?? true,
 		CLOUDFRONT_ORIGIN_SHIELD_REGION: getOriginShieldRegion(
 			process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1",
 		),
 		CLOUDFRONT_CORS_ENABLED: parseBoolean(process.env.CLOUDFRONT_CORS_ENABLED) ?? true,
+		// CLOUDFRONT
+		CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION: parseBoolean(process.env.CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION)
+			?? true,
+		URL_REWRITE_CLOUD_FRONT_FUNCTION_CONFIG: urlRewriteConfig,
 		// SAMPLE
 		DEPLOY_SAMPLE_WEBSITE: parseBoolean(process.env.DEPLOY_SAMPLE_WEBSITE) ?? false,
 	};
 };
 
-export function parseNumber(str: string | undefined, fallback: number): number {
-	if (!str) return fallback;
+export function parseNumber(str: string | undefined): number | undefined {
+	if (str === undefined) return;
 
 	const int = Number.parseInt(str, 10);
 
-	return Number.isNaN(int) ? fallback : int;
+	return Number.isNaN(int) ? undefined : int;
 }
 
 export function parseBoolean(str: string | undefined): boolean | undefined {
@@ -144,6 +179,11 @@ export type ConfigProps = {
 	 * @default 60
 	 */
 	readonly LAMBDA_TIMEOUT: number;
+	/**
+	 * The amount of time in seconds that Lambda allows a function to run before stopping it.
+	 * @default 60
+	 */
+	readonly LAMBDA_SSM_PARAMETERS: dotenv.DotenvParseOutput;
 
 	// SSM
 	/**
@@ -191,11 +231,6 @@ export type ConfigProps = {
 	 */
 	readonly CREATE_CLOUD_FRONT_DISTRIBUTION: boolean;
 	/**
-	 * Create a CloudFront function that rewrites the incoming URL to maximize cache hits?
-	 * @default true
-	 */
-	readonly CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION: boolean;
-	/**
 	 * If `true` a second CloudFront S3 origin will be created and paths starting with `"/static/*"` will be routed to it.
 	 * @default true
 	 */
@@ -210,6 +245,18 @@ export type ConfigProps = {
 	 * @default true
 	 */
 	readonly CLOUDFRONT_CORS_ENABLED: boolean;
+
+	// C L O U D F R O N T  F U N C T I O N
+	/**
+	 * Create a CloudFront function that rewrites the incoming URL to maximize cache hits?
+	 * @default true
+	 */
+	readonly CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION: boolean;
+	/**
+	 * Create a CloudFront function that rewrites the incoming URL to maximize cache hits?
+	 * @default
+	 */
+	readonly URL_REWRITE_CLOUD_FRONT_FUNCTION_CONFIG: UrlRewriteConfig;
 
 	// S A M P L E
 	/**

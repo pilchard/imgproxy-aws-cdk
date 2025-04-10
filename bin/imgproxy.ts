@@ -1,19 +1,24 @@
 #!/usr/bin/env node
 import "source-map-support/register";
 import * as cdk from "aws-cdk-lib";
-import { getConfig } from "../lib/config";
 import { ImgproxyStack } from "../lib/imgproxy-stack";
+import { getConfig } from "./config";
 
 import type { AwsEnvStackProps } from "../lib/imgproxy-stack";
 
 const config = getConfig();
+
 const stackProps: AwsEnvStackProps = {
 	env: {
 		account: config.CDK_DEPLOY_ACCOUNT || process.env.CDK_DEFAULT_ACCOUNT || "specify_account",
 		region: config.CDK_DEPLOY_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1",
 	},
-	config: getConfig(),
+	config: config,
 };
+
+const app = new cdk.App();
+
+new ImgproxyStack(app, config.STACK_NAME, stackProps);
 
 /**
  * @see: https://yshen4.github.io/infrastructure/AWS/CDK_context.html
@@ -38,7 +43,3 @@ const stackProps: AwsEnvStackProps = {
  * // 	},
  * // });
  */
-
-const app = new cdk.App();
-
-new ImgproxyStack(app, config.STACK_NAME, stackProps);
