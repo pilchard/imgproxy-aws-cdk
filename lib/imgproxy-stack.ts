@@ -483,21 +483,21 @@ export class ImgproxyStack extends Stack {
 				imgproxyDistribution.addBehavior("/*.svg", staticOrigin, staticCfBehavior);
 
 				// Static Permissions
-				const staticCfAccessPolicy = new iam.PolicyStatement({
-					sid: "AllowCloudFrontServicePrincipal",
-					principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
-					effect: iam.Effect.ALLOW,
-					actions: ["s3:GetObject"],
-					resources: [`${staticBucket?.bucketArn}/*`],
-					conditions: {
-						StringEquals: {
-							"AWS:SourceArn":
-								`arn:aws:cloudfront::${this.account}:distribution/${imgproxyDistribution.distributionId}`,
-						},
-					},
-				});
+				// const staticCfAccessPolicy = new iam.PolicyStatement({
+				// 	sid: "AllowCloudFrontServicePrincipal",
+				// 	principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
+				// 	effect: iam.Effect.ALLOW,
+				// 	actions: ["s3:GetObject"],
+				// 	resources: [`${staticBucket?.bucketArn}/*`],
+				// 	conditions: {
+				// 		StringEquals: {
+				// 			"AWS:SourceArn":
+				// 				`arn:aws:cloudfront::${this.account}:distribution/${imgproxyDistribution.distributionId}`,
+				// 		},
+				// 	},
+				// });
 
-				staticBucket.addToResourcePolicy(staticCfAccessPolicy);
+				// staticBucket.addToResourcePolicy(staticCfAccessPolicy);
 			}
 
 			new CfnOutput(this, "ImageDeliveryDomain", {
