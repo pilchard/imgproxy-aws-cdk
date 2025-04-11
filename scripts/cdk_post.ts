@@ -13,7 +13,7 @@ import type { Option } from "../functions/utility";
 type ParameterStateObject = { [path: string]: { param: string; curr?: string; next?: string; }; };
 
 const config = getConfig();
-const { ENABLE_URL_SIGNING, SYSTEMS_MANAGER_PARAMETERS_PATH, CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION } = config;
+const { ENABLE_URL_SIGNING, SYSTEMS_MANAGER_PARAMETERS_PATH, CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION } = config;
 
 const imgproxyEnvironment = parse(readFileSync(resolve(process.cwd(), ".imgproxy.env")));
 
@@ -54,7 +54,7 @@ if (!ENABLE_URL_SIGNING) {
 		imgproxyEnvironment.IMGPROXY_KEY = imgproxyKey;
 		imgproxyEnvironment.IMGPROXY_SALT = imgproxySalt;
 
-		if (CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION) {
+		if (CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION) {
 			urlRewriteConfig.imgproxy_key = imgproxyKey;
 			urlRewriteConfig.imgproxy_salt = imgproxySalt;
 			urlRewriteConfig.imgproxy_signature_size = parseNumber(imgproxyEnvironment.IMGPROXY_SIGNATURE_SIZE)
@@ -75,7 +75,7 @@ if (!ENABLE_URL_SIGNING) {
 	if (rectifiedParameterState.some !== undefined) {
 		_updateParameters(rectifiedParameterState.some);
 
-		if (CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION) {
+		if (CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION) {
 			// describe
 
 			// put

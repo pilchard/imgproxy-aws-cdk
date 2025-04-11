@@ -37,8 +37,7 @@ const urlRewriteConfig: UrlRewriteConfig = {
 	imgproxy_signature_size: parseNumber(imgproxySsmEnv.IMGPROXY_SIGNATURE_SIZE) ?? 32,
 	imgproxy_trusted_signatures: parseArray(imgproxySsmEnv.IMGPROXY_TRUSTED_SIGNATURES),
 	imgproxy_arguments_separator: imgproxySsmEnv.IMGPROXY_ARGUMENTS_SEPARATOR || ":",
-	// TODO: make configurable
-	log_level: (<LogLevel> process.env.SYSTEMS_MANAGER_PARAMETERS_ENDPOINT) || "none",
+	log_level: (<LogLevel> process.env.CLOUDFRONT_URL_REWRITE_FUNCTION_LOG_LEVEL) || "none",
 };
 
 // Stack Parameters
@@ -54,18 +53,20 @@ export const getConfig = (): ConfigProps => {
 	const ssmBasePath = process.env.SYSTEMS_MANAGER_PARAMETERS_BASE_PATH || stackName;
 	const ssmEndpoint = process.env.SYSTEMS_MANAGER_PARAMETERS_ENDPOINT;
 	const ssmParametersPath = ssmEndpoint ? `${ssmBasePath}/${ssmEndpoint}` : ssmBasePath;
+
 	return {
-		// STACK
-		STACK_NAME: stackName,
+		// CDK
 		CDK_STACK_BASE_NAME: baseName,
 		CDK_DEPLOY_ACCOUNT: process.env.CDK_DEPLOY_ACCOUNT,
 		CDK_DEPLOY_REGION: process.env.CDK_DEPLOY_REGION,
-
+		// STACK
+		STACK_NAME: stackName,
 		// IMGPROXY
 		ENABLE_URL_SIGNING: parseBoolean(process.env.ENABLE_URL_SIGNING) ?? true,
 		// LAMBDA
 		LAMBDA_FUNCTION_NAME: process.env.IMGPROXY_FUNCTION_NAME || lambdaFunctionNameDefault,
 		LAMBDA_ECR_REPOSITORY_NAME: process.env.LAMBDA_ECR_REPOSITORY_NAME || lambdaEcrRepositoryNameDefault,
+		LAMBDA_ECR_REPOSITORY_TAG: process.env.LAMBDA_ECR_REPOSITORY_TAG || "latest",
 		LAMBDA_ARCHITECTURE: process.env.IMGPROXY_ARCHITECTURE || "ARM64",
 		LAMBDA_MEMORY_SIZE: parseNumber(process.env.IMGPROXY_MEMORY_SIZE) ?? 2048,
 		LAMBDA_TIMEOUT: parseNumber(process.env.IMGPROXY_TIMEOUT) ?? 60,
@@ -73,23 +74,23 @@ export const getConfig = (): ConfigProps => {
 		// SSM
 		SYSTEMS_MANAGER_PARAMETERS_PATH: ssmParametersPath,
 		// S3
-		S3_CREATE_DEFAULT_BUCKETS: parseBoolean(process.env.S3_CREATE_DEFAULT_BUCKETS) ?? false,
+		S3_CREATE_DEFAULT_BUCKETS: parseBoolean(process.env.S3_CREATE_DEFAULT_BUCKETS) ?? true,
 		S3_CREATE_BUCKETS: parseArray(process.env.S3_CREATE_BUCKETS),
 		S3_EXISTING_OBJECT_ARNS: parseArray(process.env.S3_ACCESSIBLE_OBJECT_ARNS),
 		S3_ASSUME_ROLE_ARN: process.env.S3_ASSUME_ROLE_ARN || undefined,
 		S3_MULTI_REGION: parseBoolean(process.env.S3_MULTI_REGION) ?? false,
 		S3_CLIENT_SIDE_DECRYPTION: parseBoolean(process.env.S3_CLIENT_SIDE_DECRYPTION) ?? false,
 		// CLOUDFRONT
-		CREATE_CLOUD_FRONT_DISTRIBUTION: parseBoolean(process.env.CREATE_CLOUD_FRONT_DISTRIBUTION) ?? true,
-		ENABLE_STATIC_ORIGIN: parseBoolean(process.env.CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION) ?? true,
+		CLOUDFRONT_CREATE_DISTRIBUTION: parseBoolean(process.env.CLOUDFRONT_CREATE_DISTRIBUTION) ?? true,
 		CLOUDFRONT_ORIGIN_SHIELD_REGION: getOriginShieldRegion(
 			process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1",
 		),
 		CLOUDFRONT_CORS_ENABLED: parseBoolean(process.env.CLOUDFRONT_CORS_ENABLED) ?? true,
+		CLOUDFRONT_ENABLE_STATIC_ORIGIN: parseBoolean(process.env.CLOUDFRONT_ENABLE_STATIC_ORIGIN) ?? true,
 		// CLOUDFRONT
-		CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION: parseBoolean(process.env.CREATE_CLOUD_FRONT_URL_REWRITE_FUNCTION)
+		CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION: parseBoolean(process.env.CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION)
 			?? true,
-		URL_REWRITE_CLOUD_FRONT_FUNCTION_CONFIG: urlRewriteConfig,
+		CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG: urlRewriteConfig,
 		// SAMPLE
 		DEPLOY_SAMPLE_WEBSITE: parseBoolean(process.env.DEPLOY_SAMPLE_WEBSITE) ?? false,
 	};
@@ -160,6 +161,11 @@ export type ConfigProps = {
 	 */
 	readonly LAMBDA_ECR_REPOSITORY_NAME: string;
 	/**
+	 * The name of the ECR repository which contains the image to use for the function. The image must be in an Amazon Elastic Container Registry (Amazon ECR) repository.
+	 * @default  `latest`
+	 */
+	readonly LAMBDA_ECR_REPOSITORY_TAG: string;
+	/**
 	 * A name for the function. If you don't specify a name, stack name is used.
 	 * @default `${BASE_NAME}-lambda`
 	 */
@@ -229,12 +235,7 @@ export type ConfigProps = {
 	 * Create a CloudFront distribution to cache Lambda responses?
 	 * @default true
 	 */
-	readonly CREATE_CLOUD_FRONT_DISTRIBUTION: boolean;
-	/**
-	 * If `true` a second CloudFront S3 origin will be created and paths starting with `"/static/*"` will be routed to it.
-	 * @default true
-	 */
-	readonly ENABLE_STATIC_ORIGIN: boolean;
+	readonly CLOUDFRONT_CREATE_DISTRIBUTION: boolean;
 	/**
 	 * Origin shield region. Setting the path automatically enables OriginShield. To disable it again one must explicity set `origin_shield_enabled` to false. Enabling Origin shield incurs extra costs on top of CloudFront base prices. see; https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/origin-shield.html#:~:text=To%20enable%20Origin%20Shield%2C%20change,best%20performance%20for%20that%20origin.
 	 * @default "us-east-1"
@@ -245,18 +246,23 @@ export type ConfigProps = {
 	 * @default true
 	 */
 	readonly CLOUDFRONT_CORS_ENABLED: boolean;
+	/**
+	 * If `true` a second CloudFront S3 origin will be created and paths starting with `"/static/*"` will be routed to it.
+	 * @default true
+	 */
+	readonly CLOUDFRONT_ENABLE_STATIC_ORIGIN: boolean;
 
 	// C L O U D F R O N T  F U N C T I O N
 	/**
 	 * Create a CloudFront function that rewrites the incoming URL to maximize cache hits?
 	 * @default true
 	 */
-	readonly CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION: boolean;
+	readonly CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION: boolean;
 	/**
 	 * Create a CloudFront function that rewrites the incoming URL to maximize cache hits?
 	 * @default
 	 */
-	readonly URL_REWRITE_CLOUD_FRONT_FUNCTION_CONFIG: UrlRewriteConfig;
+	readonly CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG: UrlRewriteConfig;
 
 	// S A M P L E
 	/**

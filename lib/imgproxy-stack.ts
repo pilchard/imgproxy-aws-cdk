@@ -16,7 +16,7 @@ import {
 } from "aws-cdk-lib";
 
 import type { StackProps } from "aws-cdk-lib";
-import type { CfnDistribution, ICachePolicy } from "aws-cdk-lib/aws-cloudfront";
+import type { CfnDistribution } from "aws-cdk-lib/aws-cloudfront";
 import type { Construct } from "constructs";
 import type { ConfigProps } from "../bin/config";
 
@@ -34,19 +34,12 @@ export type ImgproxyLambdaEnv = {
 	IMGPROXY_CLOUD_WATCH_REGION: string;
 };
 
-const archMap: Record<string, lambda.Architecture> = {
+export const archMap: Record<string, lambda.Architecture> = {
 	ARM64: lambda.Architecture.ARM_64,
 	AMD64: lambda.Architecture.X86_64,
 };
 
-type ImageDeliveryCacheBehaviorConfig = {
-	origin: origins.OriginGroup | origins.HttpOrigin;
-	compress: boolean;
-	viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy;
-	cachePolicy: ICachePolicy;
-	functionAssociations: Array<{ eventType: cloudfront.FunctionEventType; function: cloudfront.Function; }>;
-	responseHeadersPolicy?: cloudfront.ResponseHeadersPolicy;
-};
+type MutableBehaviorOptions = { -readonly [key in keyof cloudfront.BehaviorOptions]: cloudfront.BehaviorOptions[key]; };
 
 export type AwsEnvStackProps = StackProps & { config: Readonly<ConfigProps>; };
 
@@ -63,6 +56,7 @@ export class ImgproxyStack extends Stack {
 				/** L A M B D A */
 				LAMBDA_FUNCTION_NAME,
 				LAMBDA_ECR_REPOSITORY_NAME,
+				LAMBDA_ECR_REPOSITORY_TAG,
 				LAMBDA_ARCHITECTURE,
 				LAMBDA_MEMORY_SIZE,
 				LAMBDA_TIMEOUT,
@@ -77,12 +71,13 @@ export class ImgproxyStack extends Stack {
 				S3_MULTI_REGION,
 				S3_CLIENT_SIDE_DECRYPTION,
 				/** C L O U D F R O N T */
-				CREATE_CLOUD_FRONT_DISTRIBUTION,
+				CLOUDFRONT_CREATE_DISTRIBUTION,
 				CLOUDFRONT_ORIGIN_SHIELD_REGION,
 				CLOUDFRONT_CORS_ENABLED,
+				CLOUDFRONT_ENABLE_STATIC_ORIGIN,
 				/** C L O U D F R O N T  F U N C T I O N*/
-				CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION,
-				URL_REWRITE_CLOUD_FRONT_FUNCTION_CONFIG,
+				CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION,
+				CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG,
 				/** S A M P L E */
 				DEPLOY_SAMPLE_WEBSITE,
 			},
@@ -95,7 +90,7 @@ export class ImgproxyStack extends Stack {
 
 		// Default
 		if (S3_CREATE_DEFAULT_BUCKETS) {
-			const defaultBucket = new s3.Bucket(this, `${STACK_NAME}_imgproxy-source-bucket`, {
+			const defaultBucket = new s3.Bucket(this, `${STACK_NAME}_imgproxy-bucket`, {
 				removalPolicy: RemovalPolicy.RETAIN,
 				blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 				encryption: s3.BucketEncryption.S3_MANAGED,
@@ -105,8 +100,8 @@ export class ImgproxyStack extends Stack {
 
 			accessibleS3Buckets.push(defaultBucket);
 
-			new CfnOutput(this, "DefaultS3Buckets", {
-				description: "Generated S3 default buckets",
+			new CfnOutput(this, "DefaultS3Bucket", {
+				description: "Generated S3 default bucket",
 				value: defaultBucket.bucketName,
 			});
 		}
@@ -287,7 +282,9 @@ export class ImgproxyStack extends Stack {
 					`imgproxy-ecr-repository_${this.node.addr}`,
 					`arn:aws:ecr:${this.region}:${this.account}:repository/${LAMBDA_ECR_REPOSITORY_NAME}`,
 				),
+				{ tagOrDigest: LAMBDA_ECR_REPOSITORY_TAG },
 			),
+
 			functionName: LAMBDA_FUNCTION_NAME,
 			memorySize: LAMBDA_MEMORY_SIZE,
 			role: imgproxyLambdaRole,
@@ -317,11 +314,11 @@ export class ImgproxyStack extends Stack {
 		/**
 		 * Create Cloudfront Distribution
 		 */
-		if (CREATE_CLOUD_FRONT_DISTRIBUTION) {
+		if (CLOUDFRONT_CREATE_DISTRIBUTION) {
 			// Cache policy
-			const imgproxyCloudFrontCachePolicy = new cloudfront.CachePolicy(
+			const imgproxyCfCachePolicy = new cloudfront.CachePolicy(
 				this,
-				`image_cache_policy_${this.node.addr}`,
+				`imgproxy-cf-cache-policy_${this.node.addr}`,
 				{
 					defaultTtl: Duration.days(365),
 					maxTtl: Duration.days(365),
@@ -334,7 +331,9 @@ export class ImgproxyStack extends Stack {
 				},
 			);
 
-			// Origin
+			// ORIGINS
+			//
+			// Lambda Origin
 			const imgproxyLambdaDomainName = Fn.parseDomainName(imgproxyLambdaURL.url);
 
 			const imgproxyLambdaOriginOptions: origins.HttpOriginProps = {
@@ -343,18 +342,56 @@ export class ImgproxyStack extends Stack {
 
 			const imgproxyLambdaOrigin = new origins.HttpOrigin(imgproxyLambdaDomainName, imgproxyLambdaOriginOptions);
 
-			const imageDeliveryCacheBehaviorConfig: ImageDeliveryCacheBehaviorConfig = {
+			const imgproxyLambdaCfBehavior: MutableBehaviorOptions = {
 				origin: imgproxyLambdaOrigin,
 				viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
 				compress: false,
-				cachePolicy: imgproxyCloudFrontCachePolicy,
+				cachePolicy: imgproxyCfCachePolicy,
 				functionAssociations: [],
 			};
+
+			// Static Origin
+			let staticBucket: s3.Bucket | undefined;
+			let staticOrigin: cloudfront.IOrigin | undefined;
+			let staticCfBehavior: MutableBehaviorOptions | undefined;
+			if (CLOUDFRONT_ENABLE_STATIC_ORIGIN) {
+				staticBucket = new s3.Bucket(this, `${STACK_NAME}_static-bucket`, {
+					removalPolicy: RemovalPolicy.RETAIN,
+					blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+					encryption: s3.BucketEncryption.S3_MANAGED,
+					enforceSSL: true,
+					autoDeleteObjects: false,
+				});
+
+				new s3deploy.BucketDeployment(this, "DeployWebsite", {
+					sources: [s3deploy.Source.asset("./assets/static")],
+					destinationBucket: staticBucket,
+					destinationKeyPrefix: "/",
+				});
+
+				const staticOac = new cloudfront.S3OriginAccessControl(this, "staticOAC", {
+					originAccessControlName: `static-oac_${this.node.addr}`,
+					signing: cloudfront.Signing.SIGV4_ALWAYS,
+				});
+
+				staticOrigin = origins.S3BucketOrigin.withOriginAccessControl(staticBucket, {
+					originAccessControl: staticOac,
+					...(CLOUDFRONT_ORIGIN_SHIELD_REGION ? { originShieldRegion: CLOUDFRONT_ORIGIN_SHIELD_REGION } : {}),
+				});
+
+				staticCfBehavior = {
+					origin: staticOrigin,
+					viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+					compress: false,
+					cachePolicy: imgproxyCfCachePolicy,
+					functionAssociations: [],
+				};
+			}
 
 			/**
 			 *  Create a CloudFront Function for url rewrites
 			 */
-			if (CREATE_URL_REWRITE_CLOUD_FRONT_FUNCTION) {
+			if (CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION) {
 				/**
 				 * Create KeyValueStore and a parameters
 				 * @see https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_cloudfront.KeyValueStore.html
@@ -362,7 +399,7 @@ export class ImgproxyStack extends Stack {
 				 */
 				const urlRewriteStore = new cloudfront.KeyValueStore(this, "urlRewriteStore", {
 					keyValueStoreName: `${STACK_NAME}_url-rewrite-store`,
-					source: cloudfront.ImportSource.fromInline(JSON.stringify(URL_REWRITE_CLOUD_FRONT_FUNCTION_CONFIG)),
+					source: cloudfront.ImportSource.fromInline(JSON.stringify(CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG)),
 				});
 
 				const urlRewriteFunction = new cloudfront.Function(this, "urlRewrite", {
@@ -372,7 +409,8 @@ export class ImgproxyStack extends Stack {
 					keyValueStore: urlRewriteStore,
 				});
 
-				imageDeliveryCacheBehaviorConfig.functionAssociations.push({
+				// associate function with lambda behavior
+				imgproxyLambdaCfBehavior.functionAssociations?.push({
 					eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
 					function: urlRewriteFunction,
 				});
@@ -383,7 +421,7 @@ export class ImgproxyStack extends Stack {
 				// Creating a custom response headers policy. CORS allowed for all origins.
 				const imageResponseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(
 					this,
-					`ResponseHeadersPolicy${this.node.addr}`,
+					`response-headers-policy_${this.node.addr}`,
 					{
 						responseHeadersPolicyName: `ImageResponsePolicy${this.node.addr}`,
 						corsBehavior: {
@@ -404,39 +442,67 @@ export class ImgproxyStack extends Stack {
 						},
 					},
 				);
-				imageDeliveryCacheBehaviorConfig.responseHeadersPolicy = imageResponseHeadersPolicy;
+				imgproxyLambdaCfBehavior.responseHeadersPolicy = imageResponseHeadersPolicy;
 			}
 
-			const imageDelivery = new cloudfront.Distribution(this, "imageDeliveryDistribution", {
-				comment: "imgproxy - image delivery",
-				defaultBehavior: imageDeliveryCacheBehaviorConfig,
+			const imgproxyDistribution = new cloudfront.Distribution(this, "imageDeliveryDistribution", {
+				comment: "imgproxy distribution",
+				defaultBehavior: imgproxyLambdaCfBehavior,
 			});
 
-			// Add OAC between CloudFront and LambdaURL
-			const oac = new cloudfront.CfnOriginAccessControl(this, "OAC", {
+			// LambdaURL OAC
+			const imgproxyLambdaOac = new cloudfront.CfnOriginAccessControl(this, "imgproxyLambdaOac", {
 				originAccessControlConfig: {
-					name: `oac${this.node.addr}`,
+					name: `imgproxy-lambda-oac_${this.node.addr}`,
 					originAccessControlOriginType: "lambda",
 					signingBehavior: "always",
 					signingProtocol: "sigv4",
 				},
 			});
 
-			const cfnImageDelivery = imageDelivery.node.defaultChild as CfnDistribution;
-			cfnImageDelivery.addPropertyOverride(
+			const cfnImgproxyDistribution = imgproxyDistribution.node.defaultChild as CfnDistribution;
+
+			cfnImgproxyDistribution.addPropertyOverride(
 				"DistributionConfig.Origins.0.OriginAccessControlId",
-				oac.getAtt("Id"),
+				imgproxyLambdaOac.getAtt("Id"),
 			);
 
+			// Lambda permissions
 			imgproxyLambda.addPermission("AllowCloudFrontServicePrincipal", {
 				principal: new iam.ServicePrincipal("cloudfront.amazonaws.com"),
 				action: "lambda:InvokeFunctionUrl",
-				sourceArn: `arn:aws:cloudfront::${this.account}:distribution/${imageDelivery.distributionId}`,
+				sourceArn: `arn:aws:cloudfront::${this.account}:distribution/${imgproxyDistribution.distributionId}`,
 			});
+
+			// Add static resources to distribution
+			if (staticBucket !== undefined && staticOrigin !== undefined && staticCfBehavior !== undefined) {
+				imgproxyDistribution.addBehavior("/static/*", staticOrigin, staticCfBehavior);
+				// favicons
+				imgproxyDistribution.addBehavior("/*.ico", staticOrigin, staticCfBehavior);
+				imgproxyDistribution.addBehavior("/*.png", staticOrigin, staticCfBehavior);
+				imgproxyDistribution.addBehavior("/*.svg", staticOrigin, staticCfBehavior);
+
+				// Static Permissions
+				const staticCfAccessPolicy = new iam.PolicyStatement({
+					sid: "AllowCloudFrontServicePrincipal",
+					principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
+					effect: iam.Effect.ALLOW,
+					actions: ["s3:GetObject"],
+					resources: [`${staticBucket?.bucketArn}/*`],
+					conditions: {
+						StringEquals: {
+							"AWS:SourceArn":
+								`arn:aws:cloudfront::${this.account}:distribution/${imgproxyDistribution.distributionId}`,
+						},
+					},
+				});
+
+				staticBucket.addToResourcePolicy(staticCfAccessPolicy);
+			}
 
 			new CfnOutput(this, "ImageDeliveryDomain", {
 				description: "Domain name of image delivery",
-				value: imageDelivery.distributionDomainName,
+				value: imgproxyDistribution.distributionDomainName,
 			});
 		}
 	}
