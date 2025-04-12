@@ -301,8 +301,10 @@ export class ImgproxyStack extends Stack {
 		// Configure SSM Parameters for Lambda
 		// @see https://community.aws/content/2lhjUrhqpbrQKNkc6lOevb3qwyU/using-ssm-parameters-in-aws-cdk?lang=en#create-an-ssm-parameter-with-cdk
 		for (const [parameter, value] of Object.entries(LAMBDA_SSM_PARAMETERS)) {
-			const parameterName = `/${SYSTEMS_MANAGER_PARAMETERS_PATH}/${parameter}`;
-			new ssm.StringParameter(this, parameterName, { parameterName: parameterName, stringValue: value });
+			if (value !== "") {
+				const parameterName = `/${SYSTEMS_MANAGER_PARAMETERS_PATH}/${parameter}`;
+				new ssm.StringParameter(this, parameterName, { parameterName: parameterName, stringValue: value });
+			}
 		}
 
 		// Enable Lambda URL
