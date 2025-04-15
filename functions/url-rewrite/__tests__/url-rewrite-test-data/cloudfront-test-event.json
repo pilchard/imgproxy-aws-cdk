@@ -1,0 +1,23 @@
+{
+	"version": "1.0",
+	"context": {
+		"eventType": "viewer-request"
+	},
+	"viewer": {
+		"ip": "1.2.3.5"
+	},
+	"request": {
+		"method": "GET",
+		"uri": "/ZZpUb-d_o5foZNet0fDFZ9xMRBoe22BFSvDHFEqAXeI/resize:fill::400:false:false:ce/preset:square/width:10/aHR0cHM6Ly9tLm1l/ZGlhLWFtYXpvbi5j/b20vaW1hZ2VzL00v/TVY1Qk1tUTNabVk0/TnpZdFkyVm1ZaTAw/WkRSbUxUZ3lPREF0/WldZelpqaGxOemsx/TnpVMlhrRXlYa0Zx/Y0dkZVFYVnlOVGMz/TWpVek5USUAuanBn",
+		"headers": {
+			"host": {
+				"value": "https://d16u1rzn9plp8l.cloudfront.net"
+			},
+			"accept": {
+				"value": "image/*"
+			}
+		},
+		"cookies": {},
+		"querystring": {}
+	}
+}

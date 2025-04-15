@@ -1,5 +1,6 @@
 {
 	"app": "npx tsx bin/imgproxy.ts",
+	"outputsFile": "outputs.json",
 	"watch": {
 		"include": ["**"],
 		"exclude": [
