@@ -32,8 +32,8 @@ if (process.env.ENABLE_URL_SIGNING) {
 }
 
 const urlRewriteConfig: UrlRewriteConfig = {
-	imgproxy_salt: imgproxyKey,
-	imgproxy_key: imgproxySalt,
+	imgproxy_key: imgproxyKey,
+	imgproxy_salt: imgproxySalt,
 	imgproxy_signature_size: parseNumber(imgproxySsmEnv.IMGPROXY_SIGNATURE_SIZE) ?? 32,
 	imgproxy_trusted_signatures: parseArray(imgproxySsmEnv.IMGPROXY_TRUSTED_SIGNATURES),
 	imgproxy_arguments_separator: imgproxySsmEnv.IMGPROXY_ARGUMENTS_SEPARATOR || ":",
