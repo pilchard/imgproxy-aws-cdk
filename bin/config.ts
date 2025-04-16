@@ -52,7 +52,7 @@ export const getConfig = (): ConfigProps => {
 	const stackName = process.env.STACK_NAME || stackNameDefault;
 	const ssmBasePath = process.env.SYSTEMS_MANAGER_PARAMETERS_BASE_PATH || stackName;
 	const ssmEndpoint = process.env.SYSTEMS_MANAGER_PARAMETERS_ENDPOINT;
-	const ssmParametersPath = ssmEndpoint ? `${ssmBasePath}/${ssmEndpoint}` : ssmBasePath;
+	const ssmParametersPath = ssmEndpoint ? `/${ssmBasePath}/${ssmEndpoint}` : `/${ssmBasePath}`;
 
 	return {
 		// CDK
