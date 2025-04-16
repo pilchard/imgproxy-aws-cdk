@@ -45,6 +45,24 @@ export type AwsEnvStackProps = StackProps & { config: Readonly<ConfigProps>; };
 
 const ENV: "development" | "testing" | "staging" | "production" = "staging";
 export class ImgproxyStack extends Stack {
+	/**
+	 * The ARN of the Imgproxy Lambda function
+	 */
+	public readonly imgproxyLambdaArn: string;
+	/**
+	 * The URL endpoint for the Imgproxy Lambda function
+	 */
+	public readonly imgproxyLambdaUrl: string;
+
+	/**
+	 * The CloudFront Distribution URL
+	 */
+	public readonly cloudFrontUrl?: string | undefined;
+	/**
+	 * The ARN of the Key Value Store associated with the UrlRewrite function
+	 */
+	public readonly urlRewriteStoreArn?: string | undefined;
+
 	constructor(scope: Construct, id: string, props: AwsEnvStackProps) {
 		super(scope, id, props);
 		const {
@@ -96,7 +114,7 @@ export class ImgproxyStack extends Stack {
 				blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 				encryption: s3.BucketEncryption.S3_MANAGED,
 				enforceSSL: true,
-				autoDeleteObjects: false,
+				autoDeleteObjects: ENV !== "production",
 			});
 
 			new s3deploy.BucketDeployment(this, "DefaultBucketDeployAssets", {
@@ -309,7 +327,7 @@ export class ImgproxyStack extends Stack {
 		// @see https://community.aws/content/2lhjUrhqpbrQKNkc6lOevb3qwyU/using-ssm-parameters-in-aws-cdk?lang=en#create-an-ssm-parameter-with-cdk
 		for (const [parameter, value] of Object.entries(LAMBDA_SSM_PARAMETERS)) {
 			if (value !== "") {
-				const parameterName = `/${SYSTEMS_MANAGER_PARAMETERS_PATH}/${parameter}`;
+				const parameterName = `${SYSTEMS_MANAGER_PARAMETERS_PATH}/${parameter}`;
 				new ssm.StringParameter(this, parameterName, { parameterName: parameterName, stringValue: value });
 			}
 		}
@@ -319,6 +337,9 @@ export class ImgproxyStack extends Stack {
 			authType: lambda.FunctionUrlAuthType.AWS_IAM,
 			invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
 		});
+
+		this.imgproxyLambdaUrl = imgproxyLambdaURL.url;
+		this.imgproxyLambdaArn = imgproxyLambda.functionArn;
 
 		/**
 		 * Create Cloudfront Distribution
@@ -369,7 +390,7 @@ export class ImgproxyStack extends Stack {
 					blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 					encryption: s3.BucketEncryption.S3_MANAGED,
 					enforceSSL: true,
-					autoDeleteObjects: false,
+					autoDeleteObjects: ENV !== "production",
 				});
 
 				new s3deploy.BucketDeployment(this, "DeployWebsite", {
@@ -408,14 +429,29 @@ export class ImgproxyStack extends Stack {
 				 */
 				const urlRewriteStore = new cloudfront.KeyValueStore(this, "urlRewriteStore", {
 					keyValueStoreName: `${STACK_NAME}_url-rewrite-store`,
-					source: cloudfront.ImportSource.fromInline(JSON.stringify(CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG)),
+					source: cloudfront.ImportSource.fromInline(
+						JSON.stringify({ config: CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG }),
+					),
 				});
 
-				const urlRewriteFunction = new cloudfront.Function(this, "urlRewrite", {
+				new CfnOutput(this, "UrlRewriteStoreArn", {
+					description: "ARN of the Key Value Store associated with the the urlRewrite CloudFront Function",
+					value: urlRewriteStore.keyValueStoreArn,
+				});
+				this.urlRewriteStoreArn = urlRewriteStore.keyValueStoreArn;
+
+				const urlRewriteFunction = new cloudfront.Function(this, "urlRewriteFunction", {
 					functionName: `${STACK_NAME}_url-rewrite`,
 					code: cloudfront.FunctionCode.fromFile({ filePath: ".dist/functions/url-rewrite/index.js" }),
 					runtime: cloudfront.FunctionRuntime.JS_2_0,
 					keyValueStore: urlRewriteStore,
+				});
+
+				// @ts-ignore
+				const urlRewriteLogRetention = new logs.LogRetention(this, "urlRewriteFunctionLogRetention", {
+					logGroupName: `/aws/cloudfront/function/${urlRewriteFunction.functionName}`,
+					retention: logs.RetentionDays.ONE_DAY,
+					removalPolicy: RemovalPolicy.DESTROY,
 				});
 
 				// associate function with lambda behavior
@@ -509,10 +545,11 @@ export class ImgproxyStack extends Stack {
 				// staticBucket.addToResourcePolicy(staticCfAccessPolicy);
 			}
 
-			new CfnOutput(this, "ImageDeliveryDomain", {
-				description: "Domain name of image delivery",
+			new CfnOutput(this, "ImgproxyDistributionUrl", {
+				description: "Url of the CloudFront Distribution",
 				value: imgproxyDistribution.distributionDomainName,
 			});
+			this.cloudFrontUrl = imgproxyDistribution.distributionDomainName;
 		}
 	}
 }

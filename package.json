@@ -25,11 +25,13 @@
 	"scripts": {
 		"watch": "tsc -w",
 		"test": "vitest",
-		"deploy": "pnpm run build && npm install -g aws-cdk && cdk deploy",
+		"deploy": "pnpm run build && pnpm run cdk:update && cdk deploy",
+		"destroy": "pnpm run cdk:update && cdk destroy --force",
 		"typecheck": "tsc --noEmit",
 		"init-json": "rm -rf functions/url-rewrite/imgproxy-indexed-options.json functions/url-rewrite/imgproxy-option-priority.json && tsx ./functions/url-rewrite/imgproxy-options.ts",
 		"build": "pnpm run typecheck && rm -rf ./.dist && pnpm run build:parcel",
-		"build:parcel": "parcel build"
+		"build:parcel": "parcel build",
+		"cdk:update": "npm install -g aws-cdk"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
