@@ -225,7 +225,7 @@ export class ImgproxyStack extends Stack {
 			sid: "SystemsManagerAccess",
 			effect: iam.Effect.ALLOW,
 			actions: ["ssm:GetParametersByPath"],
-			resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/${SYSTEMS_MANAGER_PARAMETERS_PATH}`],
+			resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${SYSTEMS_MANAGER_PARAMETERS_PATH}`],
 		});
 		iamPolicyStatements.push(systemManagerAccessPolicy);
 
