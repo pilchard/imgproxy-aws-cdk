@@ -1,6 +1,6 @@
 {
 	"app": "npx tsx bin/imgproxy.ts",
-	"outputsFile": "outputs.json",
+	"outputsFile": "./dist/deploy/outputs.json",
 	"watch": {
 		"include": ["**"],
 		"exclude": [
