@@ -430,7 +430,9 @@ export class ImgproxyStack extends Stack {
 				const urlRewriteStore = new cloudfront.KeyValueStore(this, "urlRewriteStore", {
 					keyValueStoreName: `${STACK_NAME}_url-rewrite-store`,
 					source: cloudfront.ImportSource.fromInline(
-						JSON.stringify({ config: CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG }),
+						JSON.stringify({
+							data: [{ key: "config", value: JSON.stringify(CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG) }],
+						}),
 					),
 				});
 
