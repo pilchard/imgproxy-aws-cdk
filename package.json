@@ -25,13 +25,13 @@
 	"scripts": {
 		"watch": "tsc -w",
 		"test": "vitest",
-		"deploy": "pnpm run build && pnpm run cdk:update && cdk deploy",
-		"destroy": "pnpm run cdk:update && cdk destroy --force",
+		"cdk:deploy": "pnpm run build && pnpm run cdk:update && cdk deploy && pnpm run cdk:post",
+		"cdk:destroy": "pnpm run cdk:update && cdk destroy --force",
+		"cdk:update": "npm install -g aws-cdk",
+		"cdk:post": "tsx ./bin/imgproxy-post.ts",
 		"typecheck": "tsc --noEmit",
-		"init-json": "rm -rf functions/url-rewrite/imgproxy-indexed-options.json functions/url-rewrite/imgproxy-option-priority.json && tsx ./functions/url-rewrite/imgproxy-options.ts",
 		"build": "pnpm run typecheck && rm -rf ./.dist && pnpm run build:parcel",
-		"build:parcel": "parcel build",
-		"cdk:update": "npm install -g aws-cdk"
+		"build:parcel": "parcel build"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
