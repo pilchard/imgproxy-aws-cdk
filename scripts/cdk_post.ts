@@ -40,7 +40,7 @@ const secureParameters = ["IMGPROXY_KEY", "IMGPROXY_SALT"];
 	}
 
 	// Read in deploy outputs
-	const { ImgproxyStack: imgproxyStackDeployOutputsJson } = JSON.parse(
+	const { "imgproxy-stack": imgproxyStackDeployOutputsJson } = JSON.parse(
 		readFileSync(deployOutputsPath, { encoding: "utf-8" }),
 	);
 	const imgproxyStackDeployOutputs: ImgproxyStackDeployOutputs = imgproxyStackDeployOutputsJson;
@@ -309,8 +309,8 @@ async function _putParameter(
 ) {
 	try {
 		const { stdout } = await $`aws ssm put-parameter \
-	            --name /imgproxy/testing/${key} \
-	            --value ${`"${value}"`} \
+	            --name ${key} \
+	            --value ${value} \
 	            --type ${type} \
 	            --tier ${tier} \
 				${overwrite ? "--overwrite" : ""}`;
@@ -349,7 +349,7 @@ async function logOutput(deployOutputs: ImgproxyStackDeployOutputs, signingOptio
 			for (const { Key: objectUri } of defaultObjectPaths) {
 				console.log();
 				// s3://imgproxy-stack-imgproxystackimgproxybucket21397567-5riy5cmwkypo/imgproxy/default/Imgproxy Stack_1080x1920.png
-				const s3Uri = `$s3://${deployOutputs.DefaultImgproxyBucketName}/${objectUri}`;
+				const s3Uri = `s3://${deployOutputs.DefaultImgproxyBucketName}/${objectUri}`;
 
 				const encodedS3Uri = Buffer.from(s3Uri).toString("base64url");
 
