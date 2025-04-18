@@ -10,8 +10,8 @@ const config = getConfig();
 
 const stackProps: AwsEnvStackProps = {
 	env: {
-		account: config.CDK_DEPLOY_ACCOUNT || process.env.CDK_DEFAULT_ACCOUNT || "specify_account",
-		region: config.CDK_DEPLOY_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1",
+		account: config.CDK_DEPLOY_ACCOUNT, // || process.env.CDK_DEFAULT_ACCOUNT || "specify_account",
+		region: config.CDK_DEPLOY_REGION, // || process.env.CDK_DEFAULT_REGION || "us-east-1",
 	},
 	config: config,
 };

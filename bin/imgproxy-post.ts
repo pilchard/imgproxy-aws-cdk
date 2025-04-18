@@ -7,6 +7,7 @@ import fs from "node:fs";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import prompts from "prompts";
+import cdkJson from "../cdk.json";
 import { getConfig, parseArray, parseNumber } from "./config.ts";
 
 import type { LogLevel, UrlRewriteConfig } from "../functions/url-rewrite/index.ts";
@@ -23,18 +24,105 @@ type ImgproxyStackDeployOutputs = {
 };
 type SigningConfig = Omit<UrlRewriteConfig, "log_level">;
 
-import cdkJson from "../cdk.json";
-
-const deployOutputsPath = resolve(process.cwd(), cdkJson.outputsFile);
-
 const config = getConfig();
 const imgproxyEnv = parse(readFileSync(resolve(process.cwd(), ".imgproxy.env")));
+const deployOutputsPath = resolve(process.cwd(), cdkJson.outputsFile);
 
 const { STACK_NAME, ENABLE_URL_SIGNING, SYSTEMS_MANAGER_PARAMETERS_PATH, CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION } =
 	config;
 const secureParameters = ["IMGPROXY_KEY", "IMGPROXY_SALT"];
 
-(async () => {
+switch (process.argv[2]) {
+	case "deploy": {
+		deploy();
+		break;
+	}
+	case "destroy": {
+		destroy();
+		break;
+	}
+}
+
+async function destroy() {
+	try {
+		const { stdout: callerIdentityJson } = await $`aws sts get-caller-identity --output json`;
+		const { Account: callerAccount } = JSON.parse(callerIdentityJson);
+
+		if (callerAccount !== config.CDK_DEPLOY_ACCOUNT) {
+			console.error(
+				red`CLI must be invoked with the account being deployed to. Expected ${white`${config.CDK_DEPLOY_ACCOUNT}`} but received ${white`${callerAccount}`}`,
+			);
+			return;
+		}
+	} catch (error) {
+		if (error instanceof ExecaError) {
+			console.error(error.message);
+			if (error.cause) {
+				console.error(error.cause);
+			}
+		}
+	}
+
+	try {
+		const { stdout: existingParamsJson } =
+			await $`aws ssm get-parameters-by-path --path ${SYSTEMS_MANAGER_PARAMETERS_PATH} --recursive --query Parameters[].Name --output json `;
+		const existingParams: string[] = JSON.parse(existingParamsJson);
+
+		if (existingParams.length) {
+			console.log(white`\nThe following SSM Parameters will be deleted:\n`);
+			for (const param of existingParams) {
+				console.log(red`- ${param}`);
+			}
+			console.log("\n");
+
+			const { confirmDeleteParams } = await prompts({
+				type: "confirm",
+				name: "confirmDeleteParams",
+				message: "Continue with SSM Parameter deletion?",
+				onRender() {
+					if (!Array.isArray(this)) {
+						this.message = cyanBright`Continue with SSM Parameter deletion?`;
+					}
+				},
+			});
+
+			if (!confirmDeleteParams) {
+				console.log(red`SSM Parameter deletion aborted\n`);
+				return;
+			}
+
+			await $`aws ssm delete-parameters ${existingParams.join(" ")}`;
+		}
+	} catch (error) {
+		if (error instanceof ExecaError) {
+			console.error(error.message);
+			if (error.cause) {
+				console.error(error.cause);
+			}
+		}
+	}
+}
+
+async function deploy() {
+	try {
+		const { stdout: callerIdentityJson } = await $`aws sts get-caller-identity --output json`;
+		const { Account: callerAccount } = JSON.parse(callerIdentityJson);
+
+		if (callerAccount !== config.CDK_DEPLOY_ACCOUNT) {
+			console.error(
+				red`CLI must be logged in with the account being deployed to. Expected Account ID: \`config.CDK_DEPLOY_ACCOUNT\` but received \`callerAccount\` `,
+			);
+			return;
+		}
+	} catch (error) {
+		if (error instanceof ExecaError) {
+			console.error(error.message);
+			if (error.cause) {
+				console.error(error.cause);
+			}
+		}
+	}
+
 	if (!fs.existsSync(deployOutputsPath)) {
 		console.error(red`Unable to find deploy outputs at: ${white`${deployOutputsPath}`}`);
 		return;
@@ -128,7 +216,7 @@ const secureParameters = ["IMGPROXY_KEY", "IMGPROXY_SALT"];
 	// UrlRewriteStoreArn;
 	// sampleBucketDeploymentKey;
 	// ImgproxyDistributionUrl;
-})();
+}
 
 async function initSigningParams(): Promise<Option<[string, string], Error>> {
 	let imgproxyKey = imgproxyEnv.IMGPROXY_KEY;

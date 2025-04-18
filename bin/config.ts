@@ -57,8 +57,8 @@ export const getConfig = (): ConfigProps => {
 	return {
 		// CDK
 		CDK_STACK_BASE_NAME: baseName,
-		CDK_DEPLOY_ACCOUNT: process.env.CDK_DEPLOY_ACCOUNT,
-		CDK_DEPLOY_REGION: process.env.CDK_DEPLOY_REGION,
+		CDK_DEPLOY_ACCOUNT: process.env.CDK_DEPLOY_ACCOUNT || process.env.CDK_DEFAULT_ACCOUNT,
+		CDK_DEPLOY_REGION: process.env.CDK_DEPLOY_REGION || process.env.CDK_DEFAULT_REGION,
 		// STACK
 		STACK_NAME: stackName,
 		// IMGPROXY
