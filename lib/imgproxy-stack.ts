@@ -125,14 +125,15 @@ export class ImgproxyStack extends Stack {
 
 			accessibleS3Buckets.push(defaultBucket);
 
-			new CfnOutput(this, "BucketDeploymentKeySample", {
-				description: "A sample key of S3DefaultBucketDeployment",
-				value: Fn.select(0, defaultBucketDeployment.objectKeys),
+			new CfnOutput(this, "DefaultImgproxyBucketName", {
+				description: "The name of the default bucket created by the stack",
+				value: defaultBucket.bucketName,
 			});
 		}
 
 		// Create
 		if (S3_CREATE_BUCKETS.length > 0) {
+			const createdBuckets: s3.IBucket[] = [];
 			for (const s3BucketName of S3_CREATE_BUCKETS) {
 				const bucketId = `${s3BucketName}_${this.node.addr}`;
 				const bucket = new s3.Bucket(this, bucketId, {
@@ -144,14 +145,13 @@ export class ImgproxyStack extends Stack {
 					autoDeleteObjects: false,
 				});
 
-				accessibleS3Buckets.push(bucket);
+				createdBuckets.push(bucket);
 			}
+			accessibleS3Buckets.push(...createdBuckets);
 
 			new CfnOutput(this, "CreatedS3Buckets", {
 				description: "Created S3 Buckets",
-				value: `Created ${accessibleS3Buckets.length} buckets: [${
-					accessibleS3Buckets.map((o) => o.bucketName).join(", ")
-				}]`,
+				value: JSON.stringify(createdBuckets),
 			});
 		}
 

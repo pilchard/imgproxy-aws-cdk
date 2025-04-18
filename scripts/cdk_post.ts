@@ -16,7 +16,7 @@ type ParameterStateObject = { [path: string]: { param: string; curr?: string; ne
 type ImgproxyStackDeployOutputs = {
 	UrlRewriteStoreArn: string;
 	ImgproxyDistributionDomainName: string;
-	BucketDeploymentKeySample: string;
+	DefaultImgproxyBucketName: string;
 	CreatedS3Buckets: string;
 	SampleWebsiteDomainName: string;
 	SampleWebsiteS3BucketName: string;
@@ -328,7 +328,7 @@ async function _putParameter(
  * Stack output logging
  */
 
-function logOutput(deployOutputs: ImgproxyStackDeployOutputs, signingOptions: SigningConfig) {
+async function logOutput(deployOutputs: ImgproxyStackDeployOutputs, signingOptions: SigningConfig) {
 	const shouldSign = signingOptions.imgproxy_key.length && signingOptions.imgproxy_salt.length;
 
 	const processingOptions = {
@@ -336,25 +336,46 @@ function logOutput(deployOutputs: ImgproxyStackDeployOutputs, signingOptions: Si
 		tall: ["resizing_type:fit", "width:400", "height:600"],
 	};
 
-	const sourceUriPlain = deployOutputs.BucketDeploymentKeySample;
-	const sourceUri = Buffer.from(sourceUriPlain).toString("base64url");
+	try {
+		const { stdout: s3ObjectListJson } = await $`aws s3api list-objects-v2 \
+					--bucket ${deployOutputs.DefaultImgproxyBucketName} \
+					--output json`;
+		console.log(s3ObjectListJson);
 
-	for (const [label, options] of Object.entries(processingOptions)) {
-		let imgproxyUri = `/${options.join("/")}/${sourceUri}`;
-		if (shouldSign) {
-			imgproxyUri = `/${
-				_sign(
-					signingOptions.imgproxy_salt,
-					imgproxyUri,
-					signingOptions.imgproxy_key,
-					signingOptions.imgproxy_signature_size,
-				)
-			}${imgproxyUri}`;
+		const { Contents: defaultObjectPaths } = JSON.parse(s3ObjectListJson);
+
+		console.log("Sample links");
+		for (const { Key: objectUri } of defaultObjectPaths) {
+			console.log();
+			// s3://imgproxy-stack-imgproxystackimgproxybucket21397567-5riy5cmwkypo/imgproxy/default/Imgproxy Stack_1080x1920.png
+			const s3Uri = `$s3://${deployOutputs.DefaultImgproxyBucketName}/${objectUri}`;
+
+			const encodedS3Uri = Buffer.from(s3Uri).toString("base64url");
+
+			for (const [label, options] of Object.entries(processingOptions)) {
+				const imgproxyUri = `/${options.join("/")}/${encodedS3Uri}`;
+				let signature = "unsigned";
+				if (shouldSign) {
+					signature = _sign(
+						signingOptions.imgproxy_salt,
+						imgproxyUri,
+						signingOptions.imgproxy_key,
+						signingOptions.imgproxy_signature_size,
+					);
+				}
+
+				const signedImgproxyUri = `/${signature}${imgproxyUri}`;
+				console.log(`${label}: https://${deployOutputs.ImgproxyDistributionDomainName}${signedImgproxyUri}`);
+			}
 		}
-		console.log(`${label}: https://${deployOutputs.ImgproxyDistributionDomainName}${imgproxyUri}`);
-	}
 
-	console.log(deployOutputs);
+		console.log(deployOutputs);
+	} catch (error) {
+		if (error instanceof ExecaError) {
+			console.error(error.message);
+			console.error(error.cause);
+		}
+	}
 }
 
 const _hexDecode = (hex: string) => Buffer.from(hex, "hex");

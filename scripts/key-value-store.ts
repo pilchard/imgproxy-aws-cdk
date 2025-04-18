@@ -16,7 +16,8 @@
 // console.log(deployOutputsPath);
 
 // const imgproxyStackOutput = {
-// 	kvsArn: "arn:aws:cloudfront::376129853286:key-value-store/e851eb6c-e479-41f0-9dcb-d093a0cc2cf5",
+// 	kvsArn: "arn:aws:cloudfront::825765411384:key-value-store/8cbd00dd-6550-4b1b-b8f4-de2d73042469",
+// 	DefaultImgproxyBucketName: "imgproxy-stack-imgproxystackimgproxybucket21397567-5riy5cmwkypo",
 // };
 
 // try {
@@ -30,13 +31,19 @@
 // 	const deletes: { Key: string; }[] = [{ Key: "kvs_test" }, { Key: "test_string" }]; //
 
 // 	// put
-// 	const { stdout } = await $`aws cloudfront-keyvaluestore update-keys \
-// 					--kvs-arn ${imgproxyStackOutput.kvsArn} \
-// 					--if-match ${ETag} \
-// 					--puts ${JSON.stringify(puts)} \
-// 					--deletes ${JSON.stringify(deletes)} \
-//                     --output json`;
-// 	console.log(stdout);
+// 	// const { stdout } = await $`aws cloudfront-keyvaluestore update-keys \
+// 	// 				--kvs-arn ${imgproxyStackOutput.kvsArn} \
+// 	// 				--if-match ${ETag} \
+// 	// 				--puts ${JSON.stringify(puts)} \
+// 	// 				--deletes ${JSON.stringify(deletes)} \
+// 	//                 --output json`;
+// 	// console.log(stdout);
+
+// 	// S3
+// 	const { stdout: s3ObjectListJson } = await $`aws s3api list-objects-v2 \
+// 				--bucket ${imgproxyStackOutput.DefaultImgproxyBucketName} \
+//                 --output json`;
+// 	console.log(s3ObjectListJson);
 // } catch (error) {
 // 	if (error instanceof ExecaError) {
 // 		console.error(error.message);
