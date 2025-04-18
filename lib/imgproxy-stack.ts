@@ -117,7 +117,7 @@ export class ImgproxyStack extends Stack {
 				autoDeleteObjects: ENV !== "production",
 			});
 
-			const defaultBucketDeployment = new s3deploy.BucketDeployment(this, "DefaultBucketDeployAssets", {
+			new s3deploy.BucketDeployment(this, "DefaultBucketDeployAssets", {
 				sources: [s3deploy.Source.asset("./assets/imgproxy/default")],
 				destinationBucket: defaultBucket,
 				destinationKeyPrefix: "imgproxy/default/",

@@ -14,12 +14,12 @@ import type { Option } from "../functions/utility";
 
 type ParameterStateObject = { [path: string]: { param: string; curr?: string; next?: string; }; };
 type ImgproxyStackDeployOutputs = {
-	UrlRewriteStoreArn: string;
-	ImgproxyDistributionDomainName: string;
-	DefaultImgproxyBucketName: string;
-	CreatedS3Buckets: string;
-	SampleWebsiteDomainName: string;
-	SampleWebsiteS3BucketName: string;
+	UrlRewriteStoreArn?: string;
+	ImgproxyDistributionDomainName?: string;
+	DefaultImgproxyBucketName?: string;
+	CreatedS3Buckets?: string;
+	SampleWebsiteDomainName?: string;
+	SampleWebsiteS3BucketName?: string;
 };
 type SigningConfig = Omit<UrlRewriteConfig, "log_level">;
 
@@ -115,7 +115,7 @@ const secureParameters = ["IMGPROXY_KEY", "IMGPROXY_SALT"];
 	};
 
 	// Update Key Value Store associeated with the UrlRewrite CloudFront Function
-	if (CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION) {
+	if (CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION && imgproxyStackDeployOutputs.UrlRewriteStoreArn !== undefined) {
 		await updateKeyValueStore(imgproxyStackDeployOutputs.UrlRewriteStoreArn, [{
 			Key: "config",
 			Value: JSON.stringify(urlRewriteConfig),
@@ -337,38 +337,41 @@ async function logOutput(deployOutputs: ImgproxyStackDeployOutputs, signingOptio
 	};
 
 	try {
-		const { stdout: s3ObjectListJson } = await $`aws s3api list-objects-v2 \
+		if (deployOutputs.DefaultImgproxyBucketName !== undefined) {
+			const { stdout: s3ObjectListJson } = await $`aws s3api list-objects-v2 \
 					--bucket ${deployOutputs.DefaultImgproxyBucketName} \
 					--output json`;
-		console.log(s3ObjectListJson);
+			console.log(s3ObjectListJson);
 
-		const { Contents: defaultObjectPaths } = JSON.parse(s3ObjectListJson);
+			const { Contents: defaultObjectPaths } = JSON.parse(s3ObjectListJson);
 
-		console.log("Sample links");
-		for (const { Key: objectUri } of defaultObjectPaths) {
-			console.log();
-			// s3://imgproxy-stack-imgproxystackimgproxybucket21397567-5riy5cmwkypo/imgproxy/default/Imgproxy Stack_1080x1920.png
-			const s3Uri = `$s3://${deployOutputs.DefaultImgproxyBucketName}/${objectUri}`;
+			console.log("Sample links");
+			for (const { Key: objectUri } of defaultObjectPaths) {
+				console.log();
+				// s3://imgproxy-stack-imgproxystackimgproxybucket21397567-5riy5cmwkypo/imgproxy/default/Imgproxy Stack_1080x1920.png
+				const s3Uri = `$s3://${deployOutputs.DefaultImgproxyBucketName}/${objectUri}`;
 
-			const encodedS3Uri = Buffer.from(s3Uri).toString("base64url");
+				const encodedS3Uri = Buffer.from(s3Uri).toString("base64url");
 
-			for (const [label, options] of Object.entries(processingOptions)) {
-				const imgproxyUri = `/${options.join("/")}/${encodedS3Uri}`;
-				let signature = "unsigned";
-				if (shouldSign) {
-					signature = _sign(
-						signingOptions.imgproxy_salt,
-						imgproxyUri,
-						signingOptions.imgproxy_key,
-						signingOptions.imgproxy_signature_size,
+				for (const [label, options] of Object.entries(processingOptions)) {
+					const imgproxyUri = `/${options.join("/")}/${encodedS3Uri}`;
+					let signature = "unsigned";
+					if (shouldSign) {
+						signature = _sign(
+							signingOptions.imgproxy_salt,
+							imgproxyUri,
+							signingOptions.imgproxy_key,
+							signingOptions.imgproxy_signature_size,
+						);
+					}
+
+					const signedImgproxyUri = `/${signature}${imgproxyUri}`;
+					console.log(
+						`${label}: https://${deployOutputs.ImgproxyDistributionDomainName}${signedImgproxyUri}`,
 					);
 				}
-
-				const signedImgproxyUri = `/${signature}${imgproxyUri}`;
-				console.log(`${label}: https://${deployOutputs.ImgproxyDistributionDomainName}${signedImgproxyUri}`);
 			}
 		}
-
 		console.log(deployOutputs);
 	} catch (error) {
 		if (error instanceof ExecaError) {
