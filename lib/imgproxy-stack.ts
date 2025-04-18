@@ -45,24 +45,6 @@ export type AwsEnvStackProps = StackProps & { config: Readonly<ConfigProps>; };
 
 const ENV: "development" | "testing" | "staging" | "production" = "staging";
 export class ImgproxyStack extends Stack {
-	/**
-	 * The ARN of the Imgproxy Lambda function
-	 */
-	public readonly imgproxyLambdaArn: string;
-	/**
-	 * The URL endpoint for the Imgproxy Lambda function
-	 */
-	public readonly imgproxyLambdaUrl: string;
-
-	/**
-	 * The CloudFront Distribution URL
-	 */
-	public readonly cloudFrontUrl?: string | undefined;
-	/**
-	 * The ARN of the Key Value Store associated with the UrlRewrite function
-	 */
-	public readonly urlRewriteStoreArn?: string | undefined;
-
 	constructor(scope: Construct, id: string, props: AwsEnvStackProps) {
 		super(scope, id, props);
 		const {
@@ -91,6 +73,7 @@ export class ImgproxyStack extends Stack {
 				S3_CLIENT_SIDE_DECRYPTION,
 				/** C L O U D F R O N T */
 				CLOUDFRONT_CREATE_DISTRIBUTION,
+				CLOUDFRONT_ORIGIN_SHIELD_ENABLED,
 				CLOUDFRONT_ORIGIN_SHIELD_REGION,
 				CLOUDFRONT_CORS_ENABLED,
 				CLOUDFRONT_ENABLE_STATIC_ORIGIN,
@@ -338,9 +321,6 @@ export class ImgproxyStack extends Stack {
 			invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
 		});
 
-		this.imgproxyLambdaUrl = imgproxyLambdaURL.url;
-		this.imgproxyLambdaArn = imgproxyLambda.functionArn;
-
 		/**
 		 * Create Cloudfront Distribution
 		 */
@@ -367,7 +347,7 @@ export class ImgproxyStack extends Stack {
 			const imgproxyLambdaDomainName = Fn.parseDomainName(imgproxyLambdaURL.url);
 
 			const imgproxyLambdaOriginOptions: origins.HttpOriginProps = {
-				...(CLOUDFRONT_ORIGIN_SHIELD_REGION ? { originShieldRegion: CLOUDFRONT_ORIGIN_SHIELD_REGION } : {}),
+				...(CLOUDFRONT_ORIGIN_SHIELD_ENABLED ? { originShieldRegion: CLOUDFRONT_ORIGIN_SHIELD_REGION } : {}),
 			};
 
 			const imgproxyLambdaOrigin = new origins.HttpOrigin(imgproxyLambdaDomainName, imgproxyLambdaOriginOptions);
@@ -440,7 +420,6 @@ export class ImgproxyStack extends Stack {
 					description: "ARN of the Key Value Store associated with the the urlRewrite CloudFront Function",
 					value: urlRewriteStore.keyValueStoreArn,
 				});
-				this.urlRewriteStoreArn = urlRewriteStore.keyValueStoreArn;
 
 				const urlRewriteFunction = new cloudfront.Function(this, "urlRewriteFunction", {
 					functionName: `${STACK_NAME}_url-rewrite`,
@@ -551,7 +530,6 @@ export class ImgproxyStack extends Stack {
 				description: "Url of the CloudFront Distribution",
 				value: imgproxyDistribution.distributionDomainName,
 			});
-			this.cloudFrontUrl = imgproxyDistribution.distributionDomainName;
 		}
 	}
 }

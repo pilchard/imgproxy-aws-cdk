@@ -64,32 +64,33 @@ export const getConfig = (): ConfigProps => {
 		// IMGPROXY
 		ENABLE_URL_SIGNING: parseBoolean(process.env.ENABLE_URL_SIGNING) ?? true,
 		// LAMBDA
-		LAMBDA_FUNCTION_NAME: process.env.IMGPROXY_FUNCTION_NAME || lambdaFunctionNameDefault,
+		LAMBDA_FUNCTION_NAME: process.env.LAMBDA_FUNCTION_NAME || lambdaFunctionNameDefault,
 		LAMBDA_ECR_REPOSITORY_NAME: process.env.LAMBDA_ECR_REPOSITORY_NAME || lambdaEcrRepositoryNameDefault,
 		LAMBDA_ECR_REPOSITORY_TAG: process.env.LAMBDA_ECR_REPOSITORY_TAG || "latest",
-		LAMBDA_ARCHITECTURE: process.env.IMGPROXY_ARCHITECTURE || "ARM64",
-		LAMBDA_MEMORY_SIZE: parseNumber(process.env.IMGPROXY_MEMORY_SIZE) ?? 2048,
-		LAMBDA_TIMEOUT: parseNumber(process.env.IMGPROXY_TIMEOUT) ?? 60,
+		LAMBDA_ARCHITECTURE: process.env.LAMBDA_ARCHITECTURE || "ARM64",
+		LAMBDA_MEMORY_SIZE: parseNumber(process.env.LAMBDA_MEMORY_SIZE) ?? 2048,
+		LAMBDA_TIMEOUT: parseNumber(process.env.LAMBDA_TIMEOUT) ?? 60,
 		LAMBDA_SSM_PARAMETERS: imgproxySsmEnv,
 		// SSM
 		SYSTEMS_MANAGER_PARAMETERS_PATH: ssmParametersPath,
 		// S3
 		S3_CREATE_DEFAULT_BUCKETS: parseBoolean(process.env.S3_CREATE_DEFAULT_BUCKETS) ?? true,
 		S3_CREATE_BUCKETS: parseArray(process.env.S3_CREATE_BUCKETS),
-		S3_EXISTING_OBJECT_ARNS: parseArray(process.env.S3_ACCESSIBLE_OBJECT_ARNS),
+		S3_EXISTING_OBJECT_ARNS: parseArray(process.env.S3_EXISTING_OBJECT_ARNS),
 		S3_ASSUME_ROLE_ARN: process.env.S3_ASSUME_ROLE_ARN || undefined,
 		S3_MULTI_REGION: parseBoolean(process.env.S3_MULTI_REGION) ?? false,
 		S3_CLIENT_SIDE_DECRYPTION: parseBoolean(process.env.S3_CLIENT_SIDE_DECRYPTION) ?? false,
 		// CLOUDFRONT
 		CLOUDFRONT_CREATE_DISTRIBUTION: parseBoolean(process.env.CLOUDFRONT_CREATE_DISTRIBUTION) ?? true,
+		CLOUDFRONT_CORS_ENABLED: parseBoolean(process.env.CLOUDFRONT_CORS_ENABLED) ?? true,
+		CLOUDFRONT_ORIGIN_SHIELD_ENABLED: parseBoolean(process.env.CLOUDFRONT_ORIGIN_SHIELD_ENABLED) ?? true,
 		CLOUDFRONT_ORIGIN_SHIELD_REGION: getOriginShieldRegion(
 			process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || "us-east-1",
 		),
-		CLOUDFRONT_CORS_ENABLED: parseBoolean(process.env.CLOUDFRONT_CORS_ENABLED) ?? true,
 		CLOUDFRONT_ENABLE_STATIC_ORIGIN: parseBoolean(process.env.CLOUDFRONT_ENABLE_STATIC_ORIGIN) ?? true,
-		// CLOUDFRONT
+		// CLOUDFRONT FUNCTION
 		CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION: parseBoolean(process.env.CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION)
-			?? true,
+			?? false,
 		CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG: urlRewriteConfig,
 		// SAMPLE
 		DEPLOY_SAMPLE_WEBSITE: parseBoolean(process.env.DEPLOY_SAMPLE_WEBSITE) ?? false,
@@ -236,6 +237,11 @@ export type ConfigProps = {
 	 * @default true
 	 */
 	readonly CLOUDFRONT_CREATE_DISTRIBUTION: boolean;
+	/**
+	 * Whether to enable CloudFront Origin Shield
+	 * @default true
+	 */
+	readonly CLOUDFRONT_ORIGIN_SHIELD_ENABLED: boolean;
 	/**
 	 * Origin shield region. Setting the path automatically enables OriginShield. To disable it again one must explicity set `origin_shield_enabled` to false. Enabling Origin shield incurs extra costs on top of CloudFront base prices. see; https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/origin-shield.html#:~:text=To%20enable%20Origin%20Shield%2C%20change,best%20performance%20for%20that%20origin.
 	 * @default "us-east-1"
