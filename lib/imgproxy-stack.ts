@@ -7,7 +7,7 @@ import {
 	aws_logs as logs,
 	aws_s3 as s3,
 	aws_s3_deployment as s3deploy,
-	aws_ssm as ssm,
+	// aws_ssm as ssm,
 	CfnOutput,
 	Duration,
 	Fn,
@@ -79,7 +79,7 @@ export class ImgproxyStack extends Stack {
 				LAMBDA_ARCHITECTURE,
 				LAMBDA_MEMORY_SIZE,
 				LAMBDA_TIMEOUT,
-				LAMBDA_SSM_PARAMETERS,
+				// LAMBDA_SSM_PARAMETERS,
 				/** S S M */
 				SYSTEMS_MANAGER_PARAMETERS_PATH,
 				/** S 3 */
@@ -96,7 +96,7 @@ export class ImgproxyStack extends Stack {
 				CLOUDFRONT_ENABLE_STATIC_ORIGIN,
 				/** C L O U D F R O N T  F U N C T I O N*/
 				CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION,
-				CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG,
+				// CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG,
 				/** S A M P L E */
 				DEPLOY_SAMPLE_WEBSITE,
 			},
@@ -117,7 +117,7 @@ export class ImgproxyStack extends Stack {
 				autoDeleteObjects: ENV !== "production",
 			});
 
-			new s3deploy.BucketDeployment(this, "DefaultBucketDeployAssets", {
+			const defaultBucketDeployment = new s3deploy.BucketDeployment(this, "DefaultBucketDeployAssets", {
 				sources: [s3deploy.Source.asset("./assets/imgproxy/default")],
 				destinationBucket: defaultBucket,
 				destinationKeyPrefix: "imgproxy/default/",
@@ -125,9 +125,9 @@ export class ImgproxyStack extends Stack {
 
 			accessibleS3Buckets.push(defaultBucket);
 
-			new CfnOutput(this, "DefaultS3Bucket", {
-				description: "Generated S3 default bucket",
-				value: defaultBucket.bucketName,
+			new CfnOutput(this, "BucketDeploymentKeySample", {
+				description: "A sample key of S3DefaultBucketDeployment",
+				value: Fn.select(0, defaultBucketDeployment.objectKeys),
 			});
 		}
 
@@ -184,11 +184,11 @@ export class ImgproxyStack extends Stack {
 				},
 			});
 
-			new CfnOutput(this, "SampleWebsiteDomain", {
+			new CfnOutput(this, "SampleWebsiteDomainName", {
 				description: "Sample website domain",
 				value: sampleWebsiteDelivery.distributionDomainName,
 			});
-			new CfnOutput(this, "SampleWebsiteS3Bucket", {
+			new CfnOutput(this, "SampleWebsiteS3BucketName", {
 				description: "S3 bucket use by the sample website",
 				value: sampleWebsiteBucket.bucketName,
 			});
@@ -325,12 +325,12 @@ export class ImgproxyStack extends Stack {
 
 		// Configure SSM Parameters for Lambda
 		// @see https://community.aws/content/2lhjUrhqpbrQKNkc6lOevb3qwyU/using-ssm-parameters-in-aws-cdk?lang=en#create-an-ssm-parameter-with-cdk
-		for (const [parameter, value] of Object.entries(LAMBDA_SSM_PARAMETERS)) {
-			if (value !== "") {
-				const parameterName = `${SYSTEMS_MANAGER_PARAMETERS_PATH}/${parameter}`;
-				new ssm.StringParameter(this, parameterName, { parameterName: parameterName, stringValue: value });
-			}
-		}
+		// for (const [parameter, value] of Object.entries(LAMBDA_SSM_PARAMETERS)) {
+		// 	if (value !== "") {
+		// 		const parameterName = `${SYSTEMS_MANAGER_PARAMETERS_PATH}/${parameter}`;
+		// 		new ssm.StringParameter(this, parameterName, { parameterName: parameterName, stringValue: value });
+		// 	}
+		// }
 
 		// Enable Lambda URL
 		const imgproxyLambdaURL = imgproxyLambda.addFunctionUrl({
@@ -429,11 +429,11 @@ export class ImgproxyStack extends Stack {
 				 */
 				const urlRewriteStore = new cloudfront.KeyValueStore(this, "urlRewriteStore", {
 					keyValueStoreName: `${STACK_NAME}_url-rewrite-store`,
-					source: cloudfront.ImportSource.fromInline(
-						JSON.stringify({
-							data: [{ key: "config", value: JSON.stringify(CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG) }],
-						}),
-					),
+					// source: cloudfront.ImportSource.fromInline(
+					// 	JSON.stringify({
+					// 		data: [{ key: "config", value: JSON.stringify(CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG) }],
+					// 	}),
+					// ),
 				});
 
 				new CfnOutput(this, "UrlRewriteStoreArn", {
@@ -547,7 +547,7 @@ export class ImgproxyStack extends Stack {
 				// staticBucket.addToResourcePolicy(staticCfAccessPolicy);
 			}
 
-			new CfnOutput(this, "ImgproxyDistributionUrl", {
+			new CfnOutput(this, "ImgproxyDistributionDomainName", {
 				description: "Url of the CloudFront Distribution",
 				value: imgproxyDistribution.distributionDomainName,
 			});
