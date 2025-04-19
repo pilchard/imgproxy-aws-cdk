@@ -159,19 +159,14 @@ async function deploy() {
 	 * Enable URL Signing
 	 */
 
-	// init signing parameters and apply to KVS config
-	let imgproxyKey = "";
-	let imgproxySalt = "";
+	// init signing parameters
+	const [imgproxyKey, imgproxySalt] = await initSigningParams();
 
-	const signatureParameters = await initSigningParams();
-	if (signatureParameters.some !== undefined) {
-		[imgproxyKey, imgproxySalt] = signatureParameters.some;
-	}
-
-	// Rectify and update Imgproxy SSM Parameters
+	// Update imgproxy environment
 	imgproxyEnv.IMGPROXY_KEY = imgproxyKey;
 	imgproxyEnv.IMGPROXY_SALT = imgproxySalt;
 
+	// Rectify and update Imgproxy SSM Parameters
 	const rectifiedParameterState = await rectifySsmParameters();
 	if (rectifiedParameterState.some !== undefined) {
 		await updateSsmParameters(rectifiedParameterState.some);
@@ -200,80 +195,112 @@ async function deploy() {
 	// ImgproxyDistributionUrl;
 }
 
-async function initSigningParams(): Promise<Option<[string, string], Error>> {
-	let imgproxyKey = imgproxyEnv.IMGPROXY_KEY;
-	if (imgproxyKey === undefined) {
-		const { confirmGenerateKey } = await prompts({
-			type: "confirm",
-			name: "confirmGenerateKey",
-			message: `URL signing is enabled but ${"IMGPROXY_KEY"} not found. Generate now?`,
-		});
+async function initSigningParams(): Promise<[string, string]> {
+	let imgproxyKey = "";
+	let imgproxySalt = "";
 
-		if (!confirmGenerateKey) {
-			return { none: new Error("Generate cancelled for IMGPROXY_KEY") };
-		}
-
-		imgproxyKey = (await $`xxd -g 2 -l 64 -c 64 -p /dev/random`).stdout;
+	try {
+		imgproxyKey = await _generateSigningValue("IMGPROXY_KEY");
+	} catch (error) {
+		console.error(red`Generate cancelled for IMGPROXY_KEY`);
 	}
 
-	let imgproxySalt = imgproxyEnv.IMGPROXY_SALT;
-	if (imgproxySalt === undefined) {
-		const { confirmGenerateSalt } = await prompts({
-			type: "confirm",
-			name: "confirmGenerateSalt",
-			message: `URL signing is enabled but ${"IMGPROXY_KEY"} not found. Generate now?`,
-		});
-
-		if (!confirmGenerateSalt) {
-			return { none: new Error("Generate cancelled for IMGPROXY_SALT") };
-		}
-
-		imgproxySalt = (await $`xxd -g 2 -l 64 -c 64 -p /dev/random`).stdout;
+	try {
+		imgproxySalt = await _generateSigningValue("IMGPROXY_SALT");
+	} catch (error) {
+		console.error(red`Generate cancelled for IMGPROXY_SALT`);
 	}
 
-	return { some: [imgproxyKey, imgproxySalt] };
+	return [imgproxyKey, imgproxySalt];
+}
+
+async function _generateSigningValue(parameterName: string): Promise<string> {
+	let signingValue = imgproxyEnv[parameterName];
+
+	let retrievedSigningValue: string | undefined;
+	try {
+		const { stdout: retrievedParamJson } = await $`aws ssm get-parameter \
+    			--name ${`${SYSTEMS_MANAGER_PARAMETERS_PATH}/${parameterName}`} \
+				--query Parameter \
+				--output json`;
+		const { Value: retrievedParamValue } = JSON.parse(retrievedParamJson);
+
+		retrievedSigningValue = retrievedParamValue;
+	} catch (error) {
+		// console.info("No existing IMGPROXY_SALT SSM Parameter found");
+	}
+
+	if (retrievedSigningValue !== undefined && retrievedSigningValue !== signingValue) {
+		console.log(
+			cyanBright`\nAn existing ${parameterName} parameter was retrieved from AWS that differs from that specified by the environment.`,
+		);
+		const { confirmKeepRetrieved } = await prompts({
+			type: "confirm",
+			name: "confirmKeepRetrieved",
+			message: "Keep existing AWS value?",
+		});
+
+		if (confirmKeepRetrieved) {
+			return retrievedSigningValue;
+		}
+	}
+
+	if (signingValue === undefined) {
+		console.log(
+			cyanBright`\nURL signing is enabled but no ${parameterName} value is specified by the environment.`,
+		);
+
+		const { confirmGenerate } = await prompts({
+			type: "confirm",
+			name: "confirmGenerate",
+			message: `Generate a new ${parameterName} value?`,
+		});
+
+		if (!confirmGenerate) {
+			throw new Error(`Generate cancelled for ${parameterName}`);
+		}
+
+		signingValue = (await $`xxd -g 2 -l 64 -c 64 -p /dev/random`).stdout;
+	}
+
+	return signingValue;
 }
 
 async function rectifySsmParameters(): Promise<Option<ParameterStateObject, string>> {
-	// TEMp
-	const SYSTEMS_MANAGER_PARAMETERS_PATH = "imgproxy/dev";
-
-	const parameterBasePath = `/${SYSTEMS_MANAGER_PARAMETERS_PATH}/`;
-
 	const updateState: ParameterStateObject = {};
 
 	const { stdout: existingParamsJson } = await $`aws ssm get-parameters-by-path \
-    			--path ${parameterBasePath} \
+    			--path ${SYSTEMS_MANAGER_PARAMETERS_PATH} \
 				--output json`;
 
 	if (existingParamsJson) {
 		const { Parameters } = JSON.parse(existingParamsJson);
 		for (const parameterPayload of Parameters) {
-			const parameter = parameterPayload.Name.replace(parameterBasePath, "");
+			const parameter = parameterPayload.Name.replace(`${SYSTEMS_MANAGER_PARAMETERS_PATH}/`, "");
 			updateState[parameterPayload.Name] = { param: parameter, curr: parameterPayload.Value };
 		}
 	}
 
 	for (const [parameter, value] of Object.entries(imgproxyEnv)) {
-		const parameterPath = `${parameterBasePath}${parameter}`;
+		const parameterPath = `${SYSTEMS_MANAGER_PARAMETERS_PATH}/${parameter}`;
 		updateState[parameterPath] ??= { param: parameter };
 		if (value.length) updateState[parameterPath].next = value;
 	}
 
-	const printState = (state: ParameterStateObject) => {
-		const entries = Object.entries(state);
-		if (entries.length) {
-			for (const [path, { param, curr, next }] of entries) {
-				const _curr = secureParameters.includes(param) ? `${curr?.slice(0, 2)}****${curr?.slice(-2)}` : curr;
-				const _next = secureParameters.includes(param) ? `${next?.slice(0, 2)}****${next?.slice(-2)}` : next;
+	console.log(white`\nThe following SSM Parameter updates will be made:\n`);
+	const updateEntries = Object.entries(updateState);
+	if (updateEntries.length) {
+		for (const [path, { param, curr, next }] of updateEntries) {
+			const _curr = secureParameters.includes(param) ? `${curr?.slice(0, 2)}****${curr?.slice(-2)}` : curr;
+			const _next = secureParameters.includes(param) ? `${next?.slice(0, 2)}****${next?.slice(-2)}` : next;
+			if (curr && next && curr === next) {
+				console.log(blueBright`= ${path}: ${_next}`);
+			} else {
 				if (curr) console.log((next ? yellowBright : red)`- ${path}: ${_curr}`);
 				if (next) console.log(greenBright`+ ${path}: ${_next}`);
 			}
 		}
-	};
-
-	console.log(white`\nThe following SSM Parameter updates will be made:\n`);
-	printState(updateState);
+	}
 	console.log("\n");
 
 	const { confirmUpdateParams } = await prompts({
@@ -301,11 +328,12 @@ async function updateSsmParameters(state: ParameterStateObject) {
 	for (const [parameterPath, { param, curr, next }] of Object.entries(state)) {
 		if (next === undefined) {
 			deleteParams.push(parameterPath);
-		} else {
+		} else if (curr !== next) {
 			try {
 				const parameterType = secureParameters.includes(param)
 					? ssm.ParameterType.SECURE_STRING
 					: ssm.ParameterType.STRING;
+				console.log(greenBright`\n${parameterPath}`);
 				await _putParameter(parameterPath, next, parameterType, ssm.ParameterTier.STANDARD, true);
 			} catch (error) {
 				console.error(`Failed to ${curr !== undefined ? "update" : "create"} parameter: ${parameterPath}`);
@@ -316,7 +344,7 @@ async function updateSsmParameters(state: ParameterStateObject) {
 	try {
 		await $`aws ssm delete-parameters --names ${deleteParams.join(" ")}`;
 	} catch (err) {
-		console.error(`Failed to delete parameters with names: \n\t${deleteParams.join("\n\t")}`);
+		console.error(`Failed to delete parameters: \n\t${deleteParams.join("\n\t")}`);
 	}
 }
 
@@ -444,6 +472,7 @@ async function logOutput(deployOutputs: ImgproxyStackDeployOutputs, signingOptio
 				}
 			}
 		}
+
 		console.log("\nDeploy outputs\n");
 		console.log(deployOutputs);
 	} catch (error) {
