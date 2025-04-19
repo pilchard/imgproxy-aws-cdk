@@ -1,4 +1,4 @@
-import { cyan, cyanBright, greenBright, red, white, yellowBright } from "ansis";
+import { bgBlueBright, blueBright, cyan, cyanBright, greenBright, red, white, yellowBright } from "ansis";
 import { aws_ssm as ssm } from "aws-cdk-lib";
 import { parse } from "dotenv";
 import { $, ExecaError } from "execa";
@@ -44,23 +44,14 @@ switch (process.argv[2]) {
 }
 
 async function destroy() {
-	try {
-		const { stdout: callerIdentityJson } = await $`aws sts get-caller-identity --output json`;
-		const { Account: callerAccount } = JSON.parse(callerIdentityJson);
+	const { stdout: callerIdentityJson } = await $`aws sts get-caller-identity --output json`;
+	const { Account: callerAccount } = JSON.parse(callerIdentityJson);
 
-		if (callerAccount !== config.CDK_DEPLOY_ACCOUNT) {
-			console.error(
-				red`CLI must be invoked with the account being deployed to. Expected ${white`${config.CDK_DEPLOY_ACCOUNT}`} but received ${white`${callerAccount}`}`,
-			);
-			return;
-		}
-	} catch (error) {
-		if (error instanceof ExecaError) {
-			console.error(error.message);
-			if (error.cause) {
-				console.error(error.cause);
-			}
-		}
+	if (callerAccount !== config.CDK_DEPLOY_ACCOUNT) {
+		console.error(
+			red`CLI must be invoked with the account being deployed to. Expected ${white`${config.CDK_DEPLOY_ACCOUNT}`} but received ${white`${callerAccount}`}`,
+		);
+		return;
 	}
 
 	try {
@@ -104,23 +95,14 @@ async function destroy() {
 }
 
 async function deploy() {
-	try {
-		const { stdout: callerIdentityJson } = await $`aws sts get-caller-identity --output json`;
-		const { Account: callerAccount } = JSON.parse(callerIdentityJson);
+	const { stdout: callerIdentityJson } = await $`aws sts get-caller-identity --output json`;
+	const { Account: callerAccount } = JSON.parse(callerIdentityJson);
 
-		if (callerAccount !== config.CDK_DEPLOY_ACCOUNT) {
-			console.error(
-				red`CLI must be logged in with the account being deployed to. Expected Account ID: \`config.CDK_DEPLOY_ACCOUNT\` but received \`callerAccount\` `,
-			);
-			return;
-		}
-	} catch (error) {
-		if (error instanceof ExecaError) {
-			console.error(error.message);
-			if (error.cause) {
-				console.error(error.cause);
-			}
-		}
+	if (callerAccount !== config.CDK_DEPLOY_ACCOUNT) {
+		console.error(
+			red`CLI must be logged in with the account being deployed to. Expected Account ID: \`config.CDK_DEPLOY_ACCOUNT\` but received \`callerAccount\` `,
+		);
+		return;
 	}
 
 	if (!fs.existsSync(deployOutputsPath)) {
@@ -431,13 +413,13 @@ async function logOutput(deployOutputs: ImgproxyStackDeployOutputs, signingOptio
 			const { stdout: s3ObjectListJson } = await $`aws s3api list-objects-v2 \
 					--bucket ${deployOutputs.DefaultImgproxyBucketName} \
 					--output json`;
-			console.log(s3ObjectListJson);
 
 			const { Contents: defaultObjectPaths } = JSON.parse(s3ObjectListJson);
 
 			console.log("Sample links");
 			for (const { Key: objectUri } of defaultObjectPaths) {
-				console.log();
+				console.log(bgBlueBright`\n${objectUri}\n`);
+
 				// s3://imgproxy-stack-imgproxystackimgproxybucket21397567-5riy5cmwkypo/imgproxy/default/Imgproxy Stack_1080x1920.png
 				const s3Uri = `s3://${deployOutputs.DefaultImgproxyBucketName}/${objectUri}`;
 
@@ -457,11 +439,12 @@ async function logOutput(deployOutputs: ImgproxyStackDeployOutputs, signingOptio
 
 					const signedImgproxyUri = `/${signature}${imgproxyUri}`;
 					console.log(
-						`${label}: https://${deployOutputs.ImgproxyDistributionDomainName}${signedImgproxyUri}`,
+						`${label}: ${blueBright`https://${deployOutputs.ImgproxyDistributionDomainName}${signedImgproxyUri}`}`,
 					);
 				}
 			}
 		}
+		console.log("\nDeploy outputs\n");
 		console.log(deployOutputs);
 	} catch (error) {
 		if (error instanceof ExecaError) {
