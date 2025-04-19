@@ -32,7 +32,8 @@
 		"destroy-post": "tsx ./bin/imgproxy-post.ts destroy",
 		"typecheck": "tsc --noEmit",
 		"build": "pnpm run typecheck && rm -rf ./.dist && pnpm run build:parcel",
-		"build:parcel": "parcel build"
+		"build:parcel": "parcel build",
+		"diagram": "cfn-dia html"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
