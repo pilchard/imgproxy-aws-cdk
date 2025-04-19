@@ -82,7 +82,13 @@ async function destroy() {
 				return;
 			}
 
-			await $`aws ssm delete-parameters ${existingParams.join(" ")}`;
+			for (const param of existingParams) {
+				console.log(red`\n- ${param}`);
+				const { stdout: deletedParam } = await $`aws ssm delete-parameter --name ${param}`;
+				console.log(deletedParam);
+			}
+			// const { stdout: deletedParams } = await $`aws ssm delete-parameters --names ${existingParams.join(" ")}`;
+			// console.log(deletedParams);
 		}
 	} catch (error) {
 		if (error instanceof ExecaError) {
@@ -342,7 +348,12 @@ async function updateSsmParameters(state: ParameterStateObject) {
 	}
 
 	try {
-		await $`aws ssm delete-parameters --names ${deleteParams.join(" ")}`;
+		for (const param of deleteParams) {
+			console.log(red`\n- ${param}`);
+			const { stdout: deletedParam } = await $`aws ssm delete-parameter --name ${param}`;
+			console.log(deletedParam);
+		}
+		// await $`aws ssm delete-parameters --names ${deleteParams.join(" ")}`;
 	} catch (err) {
 		console.error(`Failed to delete parameters: \n\t${deleteParams.join("\n\t")}`);
 	}
