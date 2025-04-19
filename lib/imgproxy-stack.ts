@@ -43,7 +43,6 @@ type MutableBehaviorOptions = { -readonly [key in keyof cloudfront.BehaviorOptio
 
 export type AwsEnvStackProps = StackProps & { config: Readonly<ConfigProps>; };
 
-const ENV: "development" | "testing" | "staging" | "production" = "staging";
 export class ImgproxyStack extends Stack {
 	constructor(scope: Construct, id: string, props: AwsEnvStackProps) {
 		super(scope, id, props);
@@ -71,6 +70,7 @@ export class ImgproxyStack extends Stack {
 				S3_ASSUME_ROLE_ARN,
 				S3_MULTI_REGION,
 				S3_CLIENT_SIDE_DECRYPTION,
+				S3_REMOVAL_POLICY,
 				/** C L O U D F R O N T */
 				CLOUDFRONT_CREATE_DISTRIBUTION,
 				CLOUDFRONT_ORIGIN_SHIELD_ENABLED,
@@ -93,11 +93,11 @@ export class ImgproxyStack extends Stack {
 		// Default
 		if (S3_CREATE_DEFAULT_BUCKETS) {
 			const defaultBucket = new s3.Bucket(this, `${STACK_NAME}_imgproxy-bucket`, {
-				removalPolicy: ENV === "production" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+				removalPolicy: S3_REMOVAL_POLICY,
 				blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 				encryption: s3.BucketEncryption.S3_MANAGED,
 				enforceSSL: true,
-				autoDeleteObjects: ENV !== "production",
+				autoDeleteObjects: S3_REMOVAL_POLICY !== RemovalPolicy.RETAIN,
 			});
 
 			new s3deploy.BucketDeployment(this, "DefaultBucketDeployAssets", {
@@ -121,11 +121,11 @@ export class ImgproxyStack extends Stack {
 				const bucketId = `${s3BucketName}_${this.node.addr}`;
 				const bucket = new s3.Bucket(this, bucketId, {
 					bucketName: s3BucketName,
-					removalPolicy: ENV === "production" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+					removalPolicy: S3_REMOVAL_POLICY,
 					blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 					encryption: s3.BucketEncryption.S3_MANAGED,
 					enforceSSL: true,
-					autoDeleteObjects: false,
+					autoDeleteObjects: S3_REMOVAL_POLICY !== RemovalPolicy.RETAIN,
 				});
 
 				createdBuckets.push(bucket);
@@ -366,11 +366,11 @@ export class ImgproxyStack extends Stack {
 			let staticCfBehavior: MutableBehaviorOptions | undefined;
 			if (CLOUDFRONT_ENABLE_STATIC_ORIGIN) {
 				staticBucket = new s3.Bucket(this, `${STACK_NAME}_static-bucket`, {
-					removalPolicy: ENV === "production" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+					removalPolicy: S3_REMOVAL_POLICY,
 					blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 					encryption: s3.BucketEncryption.S3_MANAGED,
 					enforceSSL: true,
-					autoDeleteObjects: ENV !== "production",
+					autoDeleteObjects: S3_REMOVAL_POLICY !== RemovalPolicy.RETAIN,
 				});
 
 				new s3deploy.BucketDeployment(this, "DeployWebsite", {

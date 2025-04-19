@@ -5,6 +5,7 @@ import path, { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getOriginShieldRegion } from "../lib/origin-shield.js";
 
+import { RemovalPolicy } from "aws-cdk-lib";
 import type { LogLevel } from "../functions/url-rewrite/index.js";
 import type { UrlRewriteConfig } from "../functions/url-rewrite/index.js";
 
@@ -80,6 +81,7 @@ export const getConfig = (): ConfigProps => {
 		S3_ASSUME_ROLE_ARN: process.env.S3_ASSUME_ROLE_ARN || undefined,
 		S3_MULTI_REGION: parseBoolean(process.env.S3_MULTI_REGION) ?? false,
 		S3_CLIENT_SIDE_DECRYPTION: parseBoolean(process.env.S3_CLIENT_SIDE_DECRYPTION) ?? false,
+		S3_REMOVAL_POLICY: getRemovalPolicy(process.env.S3_REMOVAL_POLICY) ?? RemovalPolicy.RETAIN,
 		// CLOUDFRONT
 		CLOUDFRONT_CREATE_DISTRIBUTION: parseBoolean(process.env.CLOUDFRONT_CREATE_DISTRIBUTION) ?? true,
 		CLOUDFRONT_CORS_ENABLED: parseBoolean(process.env.CLOUDFRONT_CORS_ENABLED) ?? true,
@@ -132,6 +134,28 @@ export function parseArray(str: string | undefined): string[] {
 	}
 
 	return str.split(",").map((s) => s.trim()).filter((s) => s !== "");
+}
+
+export function getRemovalPolicy(str: string | undefined): RemovalPolicy | undefined {
+	const _str = str?.trim().toLocaleLowerCase();
+
+	if (_str === undefined || _str.length === 0) {
+		return;
+	}
+
+	if (_str === "retain") {
+		return RemovalPolicy.RETAIN;
+	}
+
+	if (_str === "destroy") {
+		return RemovalPolicy.DESTROY;
+	}
+
+	if (_str === "update") {
+		return RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE;
+	}
+
+	return;
 }
 
 export type ConfigProps = {
@@ -230,6 +254,11 @@ export type ConfigProps = {
 	 * @default false
 	 */
 	readonly S3_CLIENT_SIDE_DECRYPTION: boolean;
+	/**
+	 * The removal policy for buckets created by the stack as defined by the `RemovalPolicy` enum
+	 * @default RemovalPolicy.RETAIN
+	 */
+	readonly S3_REMOVAL_POLICY: RemovalPolicy;
 
 	// CLOUDFRONT
 	/**
