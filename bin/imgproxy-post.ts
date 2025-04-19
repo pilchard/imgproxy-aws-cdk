@@ -227,6 +227,7 @@ async function _generateSigningValue(parameterName: string): Promise<string> {
 	try {
 		const { stdout: retrievedParamJson } = await $`aws ssm get-parameter \
     			--name ${`${SYSTEMS_MANAGER_PARAMETERS_PATH}/${parameterName}`} \
+				--with-decryption \
 				--query Parameter \
 				--output json`;
 		const { Value: retrievedParamValue } = JSON.parse(retrievedParamJson);
@@ -277,6 +278,7 @@ async function rectifySsmParameters(): Promise<Option<ParameterStateObject, stri
 
 	const { stdout: existingParamsJson } = await $`aws ssm get-parameters-by-path \
     			--path ${SYSTEMS_MANAGER_PARAMETERS_PATH} \
+				--with-decryption \
 				--output json`;
 
 	if (existingParamsJson) {
