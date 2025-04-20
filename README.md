@@ -6,29 +6,31 @@
 
 Before proceeding with deployment of the stack you will need to ensure the following:
 
-- **Docker** is installed on your machine. You'll need it to push the imgproxy image to the ECR repository.
+- **Docker** is installed on your machine. You'll need it to push the imgproxy image to the ECR repository. see: [Get Docker](https://docs.docker.com/get-started/get-docker/)
 
-- The **AWS CLI** and **AWS CDK** are both installed and configured on your machine.
+- The **AWS CLI** is installed and configured on your machine. see: [AWS CLI install and update instructions](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions)
 
 ### Container image
 
-You are going to deploy the latest build of the official Docker image of the OSS version of imgproxy: `ghcr.io/imgproxy/imgproxy:latest`. If you want to use a specific version of imgproxy, replace `'latest'` with the version tag.
+The stack defaults to deploying the latest build of the official Docker image of the OSS version of imgproxy — `ghcr.io/imgproxy/imgproxy:latest`. If you want to use a specific version of imgproxy, replace `'latest'` with the version tag.
 
 If using a specific version of imgproxy, ensure it is version 3.22.0 or later. Docker images of versions earlier than this don't include the necessary AWS Lambda adapter.
 
 The commands that follow assume that you have already created an ECR repository named `'imgproxy'` and are using place holders of `'us-east-1'` and `'123456789'` for AWS region and AWS account ID respectively. Be sure to replace each of these with the relevant values for your deployment before running the commands.
 
+See the AWS documentation for more details: [Pushing a Docker image to an Amazon ECR private repository](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html)
+
 #### 1. Authenticate your Docker client with the ECR registry
 
 Replace all instances of region (us-east-1) and account ID (123456789) with your actual region and account ID
 
-```bash
+```shell
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789.dkr.ecr.us-east-1.amazonaws.com
 ```
 
 #### 2. Pull the imgproxy Docker image
 
-```bash
+```shell
 docker pull ghcr.io/imgproxy/imgproxy:latest-arm64
 ```
 
@@ -39,7 +41,7 @@ docker pull ghcr.io/imgproxy/imgproxy:latest-arm64
 
 The AWS tag structure is as follows:`<account_id>.dkr.ecr.<region>.amazonaws.com/<ecr_repo_name>:<ecr_image_tag>`. Replace each of these with the relevant values for your deployment making sure that the ECR Repository name matches the ECR repository that exists in your account.
 
-```bash
+```shell
 docker tag ghcr.io/imgproxy/imgproxy:latest-arm64 123456789.dkr.ecr.us-east-1.amazonaws.com/imgproxy:latest
 ```
 
@@ -50,7 +52,7 @@ docker tag ghcr.io/imgproxy/imgproxy:latest-arm64 123456789.dkr.ecr.us-east-1.am
 
 The image tag you push here should match the one created in the prior command.
 
-```bash
+```shell
 docker push 123456789.dkr.ecr.us-east-1.amazonaws.com/imgproxy:latest
 ```
 
@@ -63,7 +65,7 @@ These instructions have been adapted from the imgproxy blog post
 
 Before deploying ensure AWS CDK is installed and configured and that you are logged in to the account you expect to deploy to.
 
-```bash
+```shell
 git clone https://github.com/pilchard/imgproxy-aws-cdk.git
 cd imgproxy-aws-cdk
 pnpm install
@@ -83,7 +85,7 @@ Successful deployment details will be output in the terminal including demo link
 
 To customize the deployment copy the `.env.sample` to `.env` and edit the settings as needed.
 
-```bash
+```shell
 cp .env.sample .env
 ```
 
@@ -91,7 +93,7 @@ cp .env.sample .env
 
 To set SSM Parameters for the Imgproxy Lambda Function create an `imgrproxy.env` file at the root of your project (or copy the provided sample) and set the configuration as needed.
 
-```bash
+```shell
 cp imgproxy.env.sample imgproxy.env
 ```
 
