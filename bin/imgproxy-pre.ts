@@ -1,4 +1,4 @@
-import { blueBright, greenBright, red, white } from "ansis";
+import { blueBright, greenBright, red, white, yellowBright } from "ansis";
 import { $ } from "execa";
 import { getConfig } from "./config.ts";
 
@@ -29,8 +29,8 @@ const {
 /*********************************
  * Test values
  */
-const LAMBDA_ECR_REPOSITORY_NAME = "ecr-pre-deploy";
-const LAMBDA_ECR_REPOSITORY_TAG = "latest";
+const LAMBDA_ECR_REPOSITORY_NAME = "ecr-pre-deploy-test2";
+const LAMBDA_ECR_REPOSITORY_TAG = "20250420";
 
 // *******************************
 const ECR_CREATE_REPOSITORY = true;
@@ -65,7 +65,7 @@ async function destroy() {
 }
 
 async function deploy() {
-	console.log(blueBright`Imgproxy pre-deploy...\n`);
+	console.log(blueBright`\nImgproxy pre-deploy...`);
 
 	if (!ECR_CREATE_REPOSITORY) {
 		console.info(
@@ -78,7 +78,6 @@ async function deploy() {
 
 	// confirm Docker is installed
 	const { stdout: dockerInstallation } = await $`command -v docker`;
-
 	if (dockerInstallation === undefined) {
 		console.error(red`Docker installation not found. Please install docker to continue.`);
 		console.info(
@@ -86,6 +85,7 @@ async function deploy() {
 		);
 		throw new Error("Docker installation not found");
 	}
+	console.log(greenBright`\nDocker installed`);
 
 	// confirm AWS CLI is installed
 	const { stdout: awsInstallation } = await $`command -v docker`;
@@ -97,6 +97,7 @@ async function deploy() {
 		);
 		throw new Error("AWS CLI installation not found");
 	}
+	console.log(greenBright`AWS CLI installed`);
 
 	// confirm deploy account and region
 	if (CDK_DEPLOY_ACCOUNT === undefined || CDK_DEPLOY_REGION === undefined) {
@@ -118,6 +119,7 @@ async function deploy() {
 		/** create ECR repository */
 		let imgproxyEcrRepo: EcrRepositoryResponseObject;
 		try {
+			console.log("\nChecking ECR repositories...");
 			const { stdout: existingRepositoriesJson } = await $`aws ecr describe-repositories \
                     --output json`; // --query repositories[].repositoryName \
 
@@ -131,18 +133,35 @@ async function deploy() {
 			if (retrievedImgproxyRepository !== undefined) {
 				imgproxyEcrRepo = retrievedImgproxyRepository;
 
-				console.log("\nSuccessfully retrieved ECR repository");
+				console.log(greenBright`ECR repository with name ${LAMBDA_ECR_REPOSITORY_NAME} found`);
+				console.log("\nChecking images...");
+
+				const { stdout: existingImageJson } = await $`aws ecr batch-get-image \
+    				--repository-name ${LAMBDA_ECR_REPOSITORY_NAME} \
+    				--image-ids imageTag=${LAMBDA_ECR_REPOSITORY_TAG} \
+					--output json`;
+
+				const { images: existingImageArr } = JSON.parse(existingImageJson);
+
+				if (existingImageArr.length) {
+					console.log(greenBright`Image with tag '${LAMBDA_ECR_REPOSITORY_TAG}' found`);
+
+					console.log(blueBright`\nImgproxy pre-deploy complete`);
+					return;
+				}
 			} else {
+				console.log(yellowBright`ECR repository with name ${LAMBDA_ECR_REPOSITORY_NAME} not found`);
+				console.log(white`\nCreating new ECR repository...`);
 				const { stdout: imgproxyEcrRepoJson } = await $`aws ecr create-repository \
 					--repository-name ${LAMBDA_ECR_REPOSITORY_NAME} \
-					--encryptionType=AES256 \
+					--encryption-configuration encryptionType=AES256 \
 					--image-tag-mutability IMMUTABLE \
     				--image-scanning-configuration scanOnPush=false \
 					--output json`;
 
 				imgproxyEcrRepo = JSON.parse(imgproxyEcrRepoJson);
 
-				console.log("\nSuccessfully created ECR repository");
+				console.log(greenBright`Successfully created ECR repository`);
 			}
 		} catch (error) {
 			throw new Error(`"Failed to retrieve or create ECR repository with name ${LAMBDA_ECR_REPOSITORY_NAME}`, {
@@ -150,7 +169,7 @@ async function deploy() {
 			});
 		}
 
-		console.log(imgproxyEcrRepo);
+		console.log("\nDeploying new ECR image...");
 
 		const dockerImagePath = `ghcr.io/imgproxy/${ECR_DOCKER_IMAGE_NAME}:${ECR_DOCKER_IMGAGE_TAG}`;
 		const awsEcrImagePath =
@@ -162,9 +181,10 @@ async function deploy() {
 		 * aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789.dkr.ecr.us-east-1.amazonaws.com
 		 * ```
 		 */
-		const { stdout: awsDockerAuthResult } =
-			await $`aws ecr get-login-password --region ${CDK_DEPLOY_REGION} | docker login --username AWS --password-stdin ${CDK_DEPLOY_ACCOUNT}.dkr.ecr.${CDK_DEPLOY_REGION}.amazonaws.com`;
-		console.log(awsDockerAuthResult);
+		console.log("\nAuthenticating Docker...");
+		const { stdout: awsDockerAuthResult } = await $`aws ecr get-login-password --region ${CDK_DEPLOY_REGION}`
+			.pipe`docker login --username AWS --password-stdin ${CDK_DEPLOY_ACCOUNT}.dkr.ecr.${CDK_DEPLOY_REGION}.amazonaws.com`;
+		console.log(greenBright`${awsDockerAuthResult}`);
 
 		/** 2. Pull the imgproxy Docker image
 		 *
@@ -172,8 +192,8 @@ async function deploy() {
 		 * docker pull ghcr.io/imgproxy/imgproxy:latest-arm64
 		 * ```
 		 */
-		const { stdout: dockerPullResult } = await $`docker pull ${dockerImagePath}`;
-		console.log(dockerPullResult);
+		console.log("\nPulling imgproxy image...");
+		await $({ stdout: "inherit", stderr: "inherit" })`docker pull ${dockerImagePath}`;
 
 		/** 3. Tag the pulled Docker image for ECR
 		 * The AWS tag structure is as follows:`<account_id>.dkr.ecr.<region>.amazonaws.com/<ecr_repo_name>:<ecr_image_tag>`. Replace each of these with the relevant values for your deployment making sure that the ECR Repository name matches the ECR repository that exists in your account.
@@ -182,20 +202,24 @@ async function deploy() {
 		 * docker tag ghcr.io/imgproxy/imgproxy:latest-arm64 123456789.dkr.ecr.us-east-1.amazonaws.com/imgproxy:latest
 		 * ```
 		 */
-		const { stdout: awsDockerTagResult } = await $`docker tag ${dockerImagePath} ${awsEcrImagePath}`;
-		console.log(awsDockerTagResult);
-
+		console.log("\nTagging image for AWS...");
+		await $({ stdout: "inherit", stderr: "inherit" })`docker tag ${dockerImagePath} ${awsEcrImagePath}`;
+		console.log(greenBright`Successfully tagged image`);
+		console.log(white`  ${dockerImagePath} → ${awsEcrImagePath}`);
 		/** 4. Push the tagged image to the ECR repository
 		 *
 		 * ```shell
 		 * docker push 123456789.dkr.ecr.us-east-1.amazonaws.com/imgproxy:latest
 		 * ```
 		 */
-		const { stdout: dockerPushResult } = await $`docker push ${awsEcrImagePath}`;
-		console.log(dockerPushResult);
+		console.log("\nPushing image to ECR...");
+		await $({ stdout: "inherit", stderr: "inherit" })`docker push ${awsEcrImagePath}`;
 
-		console.log(blueBright`\nSuccessfully deployed imgproxy Docker image`);
-		console.log({ dockerImagePath, awsEcrImagePath });
+		console.log(greenBright`\nSuccessfully deployed imgproxy Docker image\n`);
+		console.log(`  Docker image path: ${dockerImagePath}`);
+		console.log(`  ECR image path: ${awsEcrImagePath}`);
+
+		console.log(blueBright`\nImgproxy pre-deploy complete`);
 	} catch (error) {
 		if (error instanceof Error) {
 			console.error(red`${error.message}`);
