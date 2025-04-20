@@ -1,12 +1,12 @@
 import * as dotenv from "dotenv";
 import { $ } from "execa";
-import { readFileSync } from "node:fs";
 import path, { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getOriginShieldRegion } from "../lib/origin-shield.js";
 
+import { white } from "ansis";
 import { RemovalPolicy } from "aws-cdk-lib";
-import type { LogLevel } from "../functions/url-rewrite/index.js";
+import { execSync } from "node:child_process";
 import type { UrlRewriteConfig } from "../functions/url-rewrite/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -14,35 +14,17 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
-// signing setup
-const imgproxySsmEnv = dotenv.parse(readFileSync(resolve(process.cwd(), ".imgproxy.env")));
+let config: ConfigProps | undefined;
+export const getConfig = () => {
+	if (config === undefined) {
+		config = _initConfig();
+	}
 
-const hexKey = async (len = 64) => {
-	return (await $`xxd -g 2 -l ${len} -c ${len} -p /dev/urandom`).stdout;
+	return config;
 };
 
-let imgproxyKey = "";
-let imgproxySalt = "";
-
-if (process.env.ENABLE_URL_SIGNING) {
-	imgproxyKey = imgproxySsmEnv.IMGPROXY_KEY || await hexKey();
-	imgproxySalt = imgproxySsmEnv.IMGPROXY_SALT || await hexKey();
-
-	imgproxySsmEnv.IMGPROXY_KEY = imgproxyKey;
-	imgproxySsmEnv.IMGPROXY_SALT = imgproxySalt;
-}
-
-const urlRewriteConfig: UrlRewriteConfig = {
-	imgproxy_key: imgproxyKey,
-	imgproxy_salt: imgproxySalt,
-	imgproxy_signature_size: parseNumber(imgproxySsmEnv.IMGPROXY_SIGNATURE_SIZE) ?? 32,
-	imgproxy_trusted_signatures: parseArray(imgproxySsmEnv.IMGPROXY_TRUSTED_SIGNATURES),
-	imgproxy_arguments_separator: imgproxySsmEnv.IMGPROXY_ARGUMENTS_SEPARATOR || ":",
-	log_level: (<LogLevel> process.env.CLOUDFRONT_URL_REWRITE_FUNCTION_LOG_LEVEL) || "none",
-};
-
-// Stack Parameters
-export const getConfig = (): ConfigProps => {
+// Initialize sta
+const _initConfig = (): ConfigProps => {
 	// defaults
 	const baseName = process.env.STACK_BASE_NAME || "imgproxy";
 	const stackNameDefault = `${baseName}-stack`;
@@ -64,14 +46,18 @@ export const getConfig = (): ConfigProps => {
 		STACK_NAME: stackName,
 		// IMGPROXY
 		ENABLE_URL_SIGNING: parseBoolean(process.env.ENABLE_URL_SIGNING) ?? true,
+		// ECR
+		ECR_CREATE_REPOSITORY: parseBoolean(process.env.ECR_REPOSITORY_NAME) ?? true,
+		ECR_REPOSITORY_NAME: process.env.ECR_REPOSITORY_NAME || "imgproxy",
+		ECR_IMAGE_TAG: getEcrImageTag(process.env.ECR_IMAGE_TAG) ?? "latest",
+		ECR_DOCKER_IMAGE_PATH: process.env.ECR_DOCKER_IMAGE_PATH || "ghcr.io/imgproxy/imgproxy:latest-arm64",
 		// LAMBDA
 		LAMBDA_FUNCTION_NAME: process.env.LAMBDA_FUNCTION_NAME || lambdaFunctionNameDefault,
 		LAMBDA_ECR_REPOSITORY_NAME: process.env.LAMBDA_ECR_REPOSITORY_NAME || lambdaEcrRepositoryNameDefault,
-		LAMBDA_ECR_REPOSITORY_TAG: process.env.LAMBDA_ECR_REPOSITORY_TAG || "latest",
+		LAMBDA_ECR_REPOSITORY_TAG: getEcrImageTag(process.env.LAMBDA_ECR_REPOSITORY_TAG) ?? "latest",
 		LAMBDA_ARCHITECTURE: process.env.LAMBDA_ARCHITECTURE || "ARM64",
 		LAMBDA_MEMORY_SIZE: parseNumber(process.env.LAMBDA_MEMORY_SIZE) ?? 2048,
 		LAMBDA_TIMEOUT: parseNumber(process.env.LAMBDA_TIMEOUT) ?? 60,
-		LAMBDA_SSM_PARAMETERS: imgproxySsmEnv,
 		// SSM
 		SYSTEMS_MANAGER_PARAMETERS_PATH: ssmParametersPath,
 		// S3
@@ -93,11 +79,34 @@ export const getConfig = (): ConfigProps => {
 		// CLOUDFRONT FUNCTION
 		CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION: parseBoolean(process.env.CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION)
 			?? false,
-		CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG: urlRewriteConfig,
 		// SAMPLE
 		DEPLOY_SAMPLE_WEBSITE: parseBoolean(process.env.DEPLOY_SAMPLE_WEBSITE) ?? false,
 	};
 };
+
+function getEcrImageTag(str: string | undefined): string | undefined {
+	const _str = str?.trim().toLocaleLowerCase();
+
+	if (_str === undefined || _str.length === 0) {
+		return;
+	}
+
+	if (_str === "git") {
+		return _getCurrentCommitHash();
+	}
+
+	return _str;
+}
+
+function _getCurrentCommitHash(): string {
+	const gitRevParseResult = execSync("git rev-parse --short HEAD").toString().trim();
+
+	if (gitRevParseResult.startsWith("fatal:")) {
+		throw new Error(`Failed to retrieve current git commit hash with message: ${white`${gitRevParseResult}`}`);
+	}
+
+	return gitRevParseResult;
+}
 
 export function parseNumber(str: string | undefined): number | undefined {
 	if (str === undefined) return;
@@ -177,6 +186,29 @@ export type ConfigProps = {
 	 */
 	readonly ENABLE_URL_SIGNING: boolean;
 
+	// ECR
+	//
+	/**
+	 * The name of the ECR repository which contains the image to use for the function. The image must be in an Amazon Elastic Container Registry (Amazon ECR) repository.
+	 * @default true
+	 */
+	readonly ECR_CREATE_REPOSITORY: boolean;
+	/**
+	 * The name of the ECR repository which contains the image to use for the Lambda function.
+	 * @default `imgproxy`
+	 */
+	readonly ECR_REPOSITORY_NAME: string;
+	/**
+	 * The tag of the image within the ECR repository to use for the Lambda function. If the `git` is specified the short SHA1 hash of the current git commit will be used
+	 * @default `latest`
+	 */
+	readonly ECR_IMAGE_TAG: string;
+	/**
+	 * The path of the imgproxy Docker image to deploy to ECR
+	 * @default `ghcr.io/imgproxy/imgproxy:latest-arm64`
+	 */
+	readonly ECR_DOCKER_IMAGE_PATH: string;
+
 	// A W S
 	//
 	// LAMBDA
@@ -187,7 +219,7 @@ export type ConfigProps = {
 	readonly LAMBDA_ECR_REPOSITORY_NAME: string;
 	/**
 	 * The name of the ECR repository which contains the image to use for the function. The image must be in an Amazon Elastic Container Registry (Amazon ECR) repository.
-	 * @default  `latest`
+	 * @default `latest`
 	 */
 	readonly LAMBDA_ECR_REPOSITORY_TAG: string;
 	/**
@@ -210,11 +242,6 @@ export type ConfigProps = {
 	 * @default 60
 	 */
 	readonly LAMBDA_TIMEOUT: number;
-	/**
-	 * The amount of time in seconds that Lambda allows a function to run before stopping it.
-	 * @default 60
-	 */
-	readonly LAMBDA_SSM_PARAMETERS: dotenv.DotenvParseOutput;
 
 	// SSM
 	/**
@@ -293,11 +320,6 @@ export type ConfigProps = {
 	 * @default true
 	 */
 	readonly CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION: boolean;
-	/**
-	 * Create a CloudFront function that rewrites the incoming URL to maximize cache hits?
-	 * @default
-	 */
-	readonly CLOUDFRONT_URL_REWRITE_FUNCTION_CONFIG: UrlRewriteConfig;
 
 	// S A M P L E
 	/**
