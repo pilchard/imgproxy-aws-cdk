@@ -122,7 +122,7 @@ async function destroy() {
 		if (confirmDeleteEcr) {
 			console.log("\nDeleting ECR Repository...");
 
-			const { stdout: imgproxyEcrDeleteJson } = await $`aws ecr delete-repository \
+			const { stdout: _imgproxyEcrDeleteJson } = await $`aws ecr delete-repository \
 					--repository-name ${ECR_REPOSITORY_NAME} \
 					--force \
 					--output json`;

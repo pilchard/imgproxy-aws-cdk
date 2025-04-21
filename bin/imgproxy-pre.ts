@@ -123,6 +123,8 @@ async function deploy() {
 
 				imgproxyEcrRepo = JSON.parse(imgproxyEcrRepoJson);
 
+				console.log(imgproxyEcrRepo);
+
 				console.log(greenBright`Successfully created ECR repository`);
 			}
 		} catch (error) {

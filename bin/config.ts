@@ -26,10 +26,13 @@ const _initConfig = (): ConfigProps => {
 	const baseName = process.env.STACK_BASE_NAME || "imgproxy";
 	const stackNameDefault = `${baseName}-stack`;
 	const lambdaFunctionNameDefault = `${stackNameDefault}_${baseName}-lamdba`;
-	const lambdaEcrRepositoryNameDefault = baseName;
 
 	// computed
 	const stackName = process.env.STACK_NAME || stackNameDefault;
+	// ecr
+	const ecrRepositoryName = process.env.ECR_REPOSITORY_NAME || baseName;
+	const ecrImageTag = getEcrImageTag(process.env.ECR_IMAGE_TAG) ?? "latest";
+	// ssm
 	const ssmBasePath = process.env.SYSTEMS_MANAGER_PARAMETERS_BASE_PATH || stackName;
 	const ssmEndpoint = process.env.SYSTEMS_MANAGER_PARAMETERS_ENDPOINT;
 	const ssmParametersPath = ssmEndpoint ? `/${ssmBasePath}/${ssmEndpoint}` : `/${ssmBasePath}`;
@@ -45,14 +48,14 @@ const _initConfig = (): ConfigProps => {
 		ENABLE_URL_SIGNING: parseBoolean(process.env.ENABLE_URL_SIGNING) ?? true,
 		// ECR
 		ECR_CREATE_REPOSITORY: parseBoolean(process.env.ECR_REPOSITORY_NAME) ?? true,
-		ECR_REPOSITORY_NAME: process.env.ECR_REPOSITORY_NAME || "imgproxy",
-		ECR_IMAGE_TAG: getEcrImageTag(process.env.ECR_IMAGE_TAG) ?? "latest",
+		ECR_REPOSITORY_NAME: ecrRepositoryName,
+		ECR_IMAGE_TAG: ecrImageTag,
 		ECR_MAX_IMAGES: parseNumber(process.env.ECR_MAX_IMAGES) ?? 5,
 		ECR_DOCKER_IMAGE_PATH: process.env.ECR_DOCKER_IMAGE_PATH || "ghcr.io/imgproxy/imgproxy:latest-arm64",
 		// LAMBDA
 		LAMBDA_FUNCTION_NAME: process.env.LAMBDA_FUNCTION_NAME || lambdaFunctionNameDefault,
-		LAMBDA_ECR_REPOSITORY_NAME: process.env.LAMBDA_ECR_REPOSITORY_NAME || lambdaEcrRepositoryNameDefault,
-		LAMBDA_ECR_REPOSITORY_TAG: getEcrImageTag(process.env.LAMBDA_ECR_REPOSITORY_TAG) ?? "latest",
+		LAMBDA_ECR_REPOSITORY_NAME: ecrRepositoryName,
+		LAMBDA_ECR_REPOSITORY_TAG: ecrImageTag,
 		LAMBDA_ARCHITECTURE: process.env.LAMBDA_ARCHITECTURE || "ARM64",
 		LAMBDA_MEMORY_SIZE: parseNumber(process.env.LAMBDA_MEMORY_SIZE) ?? 2048,
 		LAMBDA_TIMEOUT: parseNumber(process.env.LAMBDA_TIMEOUT) ?? 60,
