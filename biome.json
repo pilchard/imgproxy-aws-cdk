@@ -10,8 +10,7 @@
 		"ignore": [".dist/*.js"]
 	},
 	"formatter": {
-		"enabled": false,
-		"indentStyle": "tab"
+		"enabled": false
 	},
 	"organizeImports": {
 		"enabled": false
