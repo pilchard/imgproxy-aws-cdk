@@ -178,8 +178,28 @@ async function deploy() {
 		 * docker pull ghcr.io/imgproxy/imgproxy:latest-arm64
 		 * ```
 		 */
-		console.log("\nPulling imgproxy image...");
+		const awsEcrImagePath =
+			`${CDK_DEPLOY_ACCOUNT}.dkr.ecr.${CDK_DEPLOY_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}:${ECR_IMAGE_TAG}`;
 
+		console.log("\nChecking local Docker images...");
+		const { stdout: localImageResultJson } = await $`docker images ${awsEcrImagePath} --format json`;
+
+		let localImageExists = false;
+		if (localImageResultJson.length) {
+			const { Repository, Tag } = JSON.parse(localImageResultJson);
+			localImageExists = `${Repository}:${Tag}` === awsEcrImagePath;
+		}
+
+		if (localImageExists) {
+			console.log(greenBright`Local Docker image found with path '${awsEcrImagePath}'`);
+
+			console.log(blueBright`\nImgproxy pre-deploy complete`);
+			return;
+		}
+
+		console.log(yellowBright`No local Docker image found with path '${awsEcrImagePath}'`);
+
+		console.log("\nPulling imgproxy image...");
 		await $({ stdout: "inherit", stderr: "inherit" })`docker pull ${ECR_DOCKER_IMAGE_PATH}`;
 
 		/** 3. Tag the pulled Docker image for ECR
@@ -190,9 +210,6 @@ async function deploy() {
 		 * ```
 		 */
 		console.log("\nTagging image for AWS...");
-
-		const awsEcrImagePath =
-			`${CDK_DEPLOY_ACCOUNT}.dkr.ecr.${CDK_DEPLOY_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}:${ECR_IMAGE_TAG}`;
 		await $({ stdout: "inherit", stderr: "inherit" })`docker tag ${ECR_DOCKER_IMAGE_PATH} ${awsEcrImagePath}`;
 
 		console.log(greenBright`Successfully tagged image`);
@@ -204,10 +221,10 @@ async function deploy() {
 		 * ```
 		 */
 		console.log("\nPushing image to ECR...");
-
 		await $({ stdout: "inherit", stderr: "inherit" })`docker push ${awsEcrImagePath}`;
 
-		console.log(greenBright`\nSuccessfully deployed imgproxy Docker image\n`);
+		console.log(greenBright`Successfully deployed imgproxy Docker image\n`);
+
 		console.log(`  Docker image path: ${ECR_DOCKER_IMAGE_PATH}`);
 		console.log(`  ECR image path: ${awsEcrImagePath}`);
 
@@ -223,55 +240,3 @@ async function deploy() {
 		throw new Error("Unknown pre-deploy error", { cause: error });
 	}
 }
-
-/**
- * Stack output logging
- */
-
-// function logOutput(deployOutputs: ImgproxyStackDeployOutputs, signingOptions: SigningConfig) {
-// 	try {
-// 		if (deployOutputs.DefaultImgproxyBucketName !== undefined) {
-// 			const { stdout: s3ObjectListJson } = await $`aws s3api list-objects-v2 \
-// 					--bucket ${deployOutputs.DefaultImgproxyBucketName} \
-// 					--output json`;
-
-// 			const { Contents: defaultObjectPaths } = JSON.parse(s3ObjectListJson);
-
-// 			console.log("Sample links");
-// 			for (const { Key: objectUri } of defaultObjectPaths) {
-// 				console.log(bgBlueBright`\n${objectUri}\n`);
-
-// 				// s3://imgproxy-stack-imgproxystackimgproxybucket21397567-5riy5cmwkypo/imgproxy/default/Imgproxy Stack_1080x1920.png
-// 				const s3Uri = `s3://${deployOutputs.DefaultImgproxyBucketName}/${objectUri}`;
-
-// 				const encodedS3Uri = Buffer.from(s3Uri).toString("base64url");
-
-// 				for (const [label, options] of Object.entries(processingOptions)) {
-// 					const imgproxyUri = `/${options.join("/")}/${encodedS3Uri}`;
-// 					let signature = "unsigned";
-// 					if (shouldSign) {
-// 						signature = _sign(
-// 							signingOptions.imgproxy_salt,
-// 							imgproxyUri,
-// 							signingOptions.imgproxy_key,
-// 							signingOptions.imgproxy_signature_size,
-// 						);
-// 					}
-
-// 					const signedImgproxyUri = `/${signature}${imgproxyUri}`;
-// 					console.log(
-// 						`${label}: ${blueBright`https://${deployOutputs.ImgproxyDistributionDomainName}${signedImgproxyUri}`}`,
-// 					);
-// 				}
-// 			}
-// 		}
-
-// 		console.log("\nDeploy outputs\n");
-// 		console.log(deployOutputs);
-// 	} catch (error) {
-// 		if (error instanceof ExecaError) {
-// 			console.error(error.message);
-// 			console.error(error.cause);
-// 		}
-// 	}
-// }

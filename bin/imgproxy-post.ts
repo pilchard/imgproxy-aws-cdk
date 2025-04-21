@@ -28,8 +28,16 @@ const config = getConfig();
 const imgproxyEnv = parse(readFileSync(resolve(process.cwd(), ".imgproxy.env")));
 const deployOutputsPath = resolve(process.cwd(), cdkJson.outputsFile);
 
-const { STACK_NAME, ENABLE_URL_SIGNING, SYSTEMS_MANAGER_PARAMETERS_PATH, CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION } =
-	config;
+const {
+	CDK_DEPLOY_ACCOUNT,
+	CDK_DEPLOY_REGION,
+	STACK_NAME,
+	ECR_REPOSITORY_NAME,
+	ECR_IMAGE_TAG,
+	ENABLE_URL_SIGNING,
+	SYSTEMS_MANAGER_PARAMETERS_PATH,
+	CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION,
+} = config;
 const secureParameters = ["IMGPROXY_KEY", "IMGPROXY_SALT"];
 
 switch (process.argv[2]) {
@@ -44,9 +52,17 @@ switch (process.argv[2]) {
 }
 
 async function destroy() {
+	console.log(blueBright`\nImgproxy post-destroy...`);
+
 	const { stdout: callerIdentityJson } = await $`aws sts get-caller-identity --output json`;
 	const { Account: callerAccount } = JSON.parse(callerIdentityJson);
 
+	// confirm deploy account and region
+	if (CDK_DEPLOY_ACCOUNT === undefined || CDK_DEPLOY_REGION === undefined) {
+		throw new Error("Unable to determine CDK_DEPLOY_ACCOUNT or CDK_DEPLOY_REGION");
+	}
+
+	// confirm cli caller account identity
 	if (callerAccount !== config.CDK_DEPLOY_ACCOUNT) {
 		console.error(
 			red`CLI must be invoked with the account being deployed to. Expected ${white`${config.CDK_DEPLOY_ACCOUNT}`} but received ${white`${callerAccount}`}`,
@@ -77,18 +93,48 @@ async function destroy() {
 				},
 			});
 
-			if (!confirmDeleteParams) {
+			if (confirmDeleteParams) {
+				console.log("\nDeleting SSM Parameters...");
+				for (const param of existingParams) {
+					console.log(red`\n- ${param}`);
+					const { stdout: deletedParam } = await $`aws ssm delete-parameter --name ${param}`;
+					console.log(deletedParam);
+				}
+				console.log(greenBright`SSM Parameter deletion complete\n`);
+			} else {
 				console.log(red`SSM Parameter deletion aborted\n`);
-				return;
 			}
 
-			for (const param of existingParams) {
-				console.log(red`\n- ${param}`);
-				const { stdout: deletedParam } = await $`aws ssm delete-parameter --name ${param}`;
-				console.log(deletedParam);
+			console.log(
+				white`\nPreparing to delete the ECR repository with name ${ECR_REPOSITORY_NAME}. Deleting the repository will also delete all of its contents.\n`,
+			);
+			const { confirmDeleteEcr } = await prompts({
+				type: "confirm",
+				name: "confirmDeleteEcr",
+				message: "Continue with ECR repository deletion?",
+				onRender() {
+					if (!Array.isArray(this)) {
+						this.message = cyanBright`Continue with ECR repository deletion?`;
+					}
+				},
+			});
+
+			if (confirmDeleteEcr) {
+				console.log("\nDeleting ECR Repository...");
+				const awsEcrImagePath =
+					`${CDK_DEPLOY_ACCOUNT}.dkr.ecr.${CDK_DEPLOY_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}:${ECR_IMAGE_TAG}`;
+
+				const { stdout: imgproxyEcrDeleteJson } = await $`aws ecr delete-repository \
+					--repository-name ${awsEcrImagePath} \
+					--force \
+					--output json`;
+
+				console.log(greenBright`ECR Repository deletion complete\n`);
+			} else {
+				console.log(red`ECR Repository deletion aborted\n`);
 			}
-			// const { stdout: deletedParams } = await $`aws ssm delete-parameters --names ${existingParams.join(" ")}`;
-			// console.log(deletedParams);
+
+			console.log(blueBright`\nImgproxy post-destroy complete`);
 		}
 	} catch (error) {
 		if (error instanceof ExecaError) {
