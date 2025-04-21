@@ -10,11 +10,55 @@ Before proceeding with deployment of the stack you will need to ensure the follo
 
 - The **AWS CLI** is installed and configured on your machine. see: [AWS CLI install and update instructions](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions)
 
-### Container image
+## Deploy with AWS CDK
 
-The stack defaults to deploying the latest build of the official Docker image of the OSS version of imgproxy — `ghcr.io/imgproxy/imgproxy:latest`. If you want to use a specific version of imgproxy, replace `'latest'` with the version tag.
+```shell
+git clone https://github.com/pilchard/imgproxy-aws-cdk.git
+cd imgproxy-aws-cdk
+pnpm install
+cdk bootstrap
+cp .env.sample .env
+cp .imgproxy.env.sample .imgproxy.env
+pnpm run deploy
+```
 
-If using a specific version of imgproxy, ensure it is version 3.22.0 or later. Docker images of versions earlier than this don't include the necessary AWS Lambda adapter.
+Follow the prompts in the terminal to complete deployment. A pre-deploy script will run to initialize or update the ECR repository and a post-deploy script will handle initialization of imgproxy signing parameters and sync configuration values from `.imgproxy.env` to SSM Parameters accessible by the Lambda Function.
+
+Upon completion deployment details will be output in the terminal including demo links for the sample images included in the stack, as well as stack outputs such as the domain of the CloudFront distribution and the name of the default S3 bucket.
+
+## Configuration
+
+#### Stack
+
+To customize the deployment copy the `.env.sample` to `.env` and edit the settings as needed.
+
+```shell
+cp .env.sample .env
+```
+
+#### Imgproxy Lambda
+
+To set SSM Parameters for the Imgproxy Lambda Function create an `imgrproxy.env` file at the root of your project (or copy the provided sample) and set the configuration as needed.
+
+```shell
+cp imgproxy.env.sample imgproxy.env
+```
+
+## Clean up resources
+
+To remove cloud resources created during deploy run the `destroy` script.
+
+```shell
+pnpm run destroy
+```
+
+---
+
+## Manual ECR Repository setup
+
+Running the deploy as pulled will create the required ECR repository and handle pulling and deploying the imgproxy Docker image for you. If you would like to do this manually you can set `ECR_CREATE_REPOSITORY=false` in your `.env` file and follow the directions below.
+
+The stack defaults to deploying the latest build of the official Docker image of the OSS version of imgproxy — `ghcr.io/imgproxy/imgproxy:latest`. If you want to use a specific version of imgproxy, replace `'latest'` with the desired version tag. If using a specific version of imgproxy, ensure it is version 3.22.0 or later. Docker images of versions earlier than this don't include the necessary AWS Lambda adapter.
 
 The commands that follow assume that you have already created an ECR repository named `'imgproxy'` and are using place holders of `'us-east-1'` and `'123456789'` for AWS region and AWS account ID respectively. Be sure to replace each of these with the relevant values for your deployment before running the commands.
 
@@ -60,50 +104,6 @@ docker push 123456789.dkr.ecr.us-east-1.amazonaws.com/imgproxy:latest
 
 These instructions have been adapted from the imgproxy blog post
 [(Almost) free image processing with imgproxy and AWS Lambda](https://imgproxy.net/blog/almost-free-image-processing-with-imgproxy-and-aws-lambda/).
-
-## Deploy the stack using AWS CDK
-
-Before deploying ensure AWS CDK is installed and configured and that you are logged in to the account you expect to deploy to.
-
-```shell
-git clone https://github.com/pilchard/imgproxy-aws-cdk.git
-cd imgproxy-aws-cdk
-pnpm install
-cdk bootstrap
-cp .env.sample .env
-cp .imgproxy.env.sample .imgproxy.env
-pnpm run deploy
-```
-
-Follow the prompts in the terminal to complete deployment. After deployment a script will run to initialize imgproxy signing parameters and sync configuration values from `.imgproxy.env` to SSM Parameters accessible by the Lambda Function.
-
-Successful deployment details will be output in the terminal including demo links for the sample images as well as stack outputs such as the domain of the CloudFront distribution and the name of the default S3 bucket.
-
-## Configuration
-
-#### Stack
-
-To customize the deployment copy the `.env.sample` to `.env` and edit the settings as needed.
-
-```shell
-cp .env.sample .env
-```
-
-#### Imgproxy Lambda
-
-To set SSM Parameters for the Imgproxy Lambda Function create an `imgrproxy.env` file at the root of your project (or copy the provided sample) and set the configuration as needed.
-
-```shell
-cp imgproxy.env.sample imgproxy.env
-```
-
-## Clean up resources
-
-To remove cloud resources created for this solution, just execute the following command:
-
-```
-pnpm run destroy
-```
 
 ## License
 
