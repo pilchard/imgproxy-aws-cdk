@@ -50,6 +50,7 @@ const _initConfig = (): ConfigProps => {
 		ECR_CREATE_REPOSITORY: parseBoolean(process.env.ECR_REPOSITORY_NAME) ?? true,
 		ECR_REPOSITORY_NAME: process.env.ECR_REPOSITORY_NAME || "imgproxy",
 		ECR_IMAGE_TAG: getEcrImageTag(process.env.ECR_IMAGE_TAG) ?? "latest",
+		ECR_MAX_IMAGES: parseNumber(process.env.ECR_MAX_IMAGES) ?? 5,
 		ECR_DOCKER_IMAGE_PATH: process.env.ECR_DOCKER_IMAGE_PATH || "ghcr.io/imgproxy/imgproxy:latest-arm64",
 		// LAMBDA
 		LAMBDA_FUNCTION_NAME: process.env.LAMBDA_FUNCTION_NAME || lambdaFunctionNameDefault,
@@ -203,6 +204,11 @@ export type ConfigProps = {
 	 * @default `latest`
 	 */
 	readonly ECR_IMAGE_TAG: string;
+	/**
+	 * The maximum number of images to keep in the repository. Images will be removed oldest first.
+	 * @default 5
+	 */
+	readonly ECR_MAX_IMAGES: number;
 	/**
 	 * The path of the imgproxy Docker image to deploy to ECR
 	 * @default `ghcr.io/imgproxy/imgproxy:latest-arm64`

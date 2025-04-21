@@ -13,16 +13,7 @@ type EcrRepositoryResponseObject = {
 	repositoryUri?: string;
 };
 
-switch (process.argv[2]) {
-	case "deploy": {
-		deploy();
-		break;
-	}
-	case "destroy": {
-		destroy();
-		break;
-	}
-}
+type EcrImageDetail = { repositoryName: string; imageTags: string[]; imagePushedAt: string; imageDigest: string; };
 
 const {
 	CDK_DEPLOY_ACCOUNT,
@@ -30,6 +21,7 @@ const {
 	ECR_CREATE_REPOSITORY,
 	ECR_REPOSITORY_NAME,
 	ECR_IMAGE_TAG,
+	ECR_MAX_IMAGES,
 	ECR_DOCKER_IMAGE_PATH,
 } = getConfig();
 
@@ -223,12 +215,41 @@ async function deploy() {
 		console.log("\nPushing image to ECR...");
 		await $({ stdout: "inherit", stderr: "inherit" })`docker push ${awsEcrImagePath}`;
 
-		console.log(greenBright`Successfully deployed imgproxy Docker image\n`);
+		console.log(greenBright`Successfully deployed imgproxy Docker image`);
 
+		// prune images to ECR_MAX_IMAGES
+		const { stdout: allImagesJson } = await $`aws ecr describe-images \
+							--repository-name ${ECR_REPOSITORY_NAME} \
+							--output json`;
+
+		const { imageDetails: allImages }: { imageDetails: EcrImageDetail[]; } = JSON.parse(allImagesJson);
+
+		if (allImages.length > ECR_MAX_IMAGES) {
+			console.log(`\nPruning images to max of ${ECR_MAX_IMAGES}...`);
+			console.log(
+				`Removing ${allImages.length - ECR_MAX_IMAGES} ${
+					allImages.length - ECR_MAX_IMAGES === 1 ? "image" : "images"
+				}`,
+			);
+
+			const deleteImages = allImages.sort((a, b) => b.imagePushedAt.localeCompare(a.imagePushedAt)).slice(
+				ECR_MAX_IMAGES,
+			);
+
+			for (const image of deleteImages) {
+				console.log(red`- imageDigest: ${image.imageDigest}`);
+
+				await $`aws ecr batch-delete-image \
+							--repository-name ${ECR_REPOSITORY_NAME} \
+							--image-ids imageDigest=${image.imageDigest}`;
+			}
+
+			console.log(greenBright`Successfully pruned images`);
+		}
+
+		console.log(blueBright`\nImgproxy pre-deploy complete\n`);
 		console.log(`  Docker image path: ${ECR_DOCKER_IMAGE_PATH}`);
 		console.log(`  ECR image path: ${awsEcrImagePath}`);
-
-		console.log(blueBright`\nImgproxy pre-deploy complete`);
 	} catch (error) {
 		if (error instanceof Error) {
 			console.error(red`${error.message}`);
@@ -238,5 +259,16 @@ async function deploy() {
 			throw error;
 		}
 		throw new Error("Unknown pre-deploy error", { cause: error });
+	}
+}
+
+switch (process.argv[2]) {
+	case "deploy": {
+		deploy();
+		break;
+	}
+	case "destroy": {
+		destroy();
+		break;
 	}
 }

@@ -33,7 +33,6 @@ const {
 	CDK_DEPLOY_REGION,
 	STACK_NAME,
 	ECR_REPOSITORY_NAME,
-	ECR_IMAGE_TAG,
 	ENABLE_URL_SIGNING,
 	SYSTEMS_MANAGER_PARAMETERS_PATH,
 	CLOUDFRONT_CREATE_URL_REWRITE_FUNCTION,
@@ -96,46 +95,44 @@ async function destroy() {
 			if (confirmDeleteParams) {
 				console.log("\nDeleting SSM Parameters...");
 				for (const param of existingParams) {
-					console.log(red`\n- ${param}`);
-					const { stdout: deletedParam } = await $`aws ssm delete-parameter --name ${param}`;
-					console.log(deletedParam);
+					console.log(red`- ${param}`);
+					const { stdout: _deletedParam } = await $`aws ssm delete-parameter --name ${param}`;
+					// console.log(deletedParam);
 				}
 				console.log(greenBright`SSM Parameter deletion complete\n`);
 			} else {
 				console.log(red`SSM Parameter deletion aborted\n`);
 			}
+		}
 
-			console.log(
-				white`\nPreparing to delete the ECR repository with name ${ECR_REPOSITORY_NAME}. Deleting the repository will also delete all of its contents.\n`,
-			);
-			const { confirmDeleteEcr } = await prompts({
-				type: "confirm",
-				name: "confirmDeleteEcr",
-				message: "Continue with ECR repository deletion?",
-				onRender() {
-					if (!Array.isArray(this)) {
-						this.message = cyanBright`Continue with ECR repository deletion?`;
-					}
-				},
-			});
+		console.log(
+			white`\nPreparing to delete the ECR repository with name ${ECR_REPOSITORY_NAME}. Deleting the repository will also delete all of its contents.\n`,
+		);
+		const { confirmDeleteEcr } = await prompts({
+			type: "confirm",
+			name: "confirmDeleteEcr",
+			message: "Continue with ECR repository deletion?",
+			onRender() {
+				if (!Array.isArray(this)) {
+					this.message = cyanBright`Continue with ECR repository deletion?`;
+				}
+			},
+		});
 
-			if (confirmDeleteEcr) {
-				console.log("\nDeleting ECR Repository...");
-				const awsEcrImagePath =
-					`${CDK_DEPLOY_ACCOUNT}.dkr.ecr.${CDK_DEPLOY_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}:${ECR_IMAGE_TAG}`;
+		if (confirmDeleteEcr) {
+			console.log("\nDeleting ECR Repository...");
 
-				const { stdout: imgproxyEcrDeleteJson } = await $`aws ecr delete-repository \
-					--repository-name ${awsEcrImagePath} \
+			const { stdout: imgproxyEcrDeleteJson } = await $`aws ecr delete-repository \
+					--repository-name ${ECR_REPOSITORY_NAME} \
 					--force \
 					--output json`;
 
-				console.log(greenBright`ECR Repository deletion complete\n`);
-			} else {
-				console.log(red`ECR Repository deletion aborted\n`);
-			}
-
-			console.log(blueBright`\nImgproxy post-destroy complete`);
+			console.log(greenBright`ECR Repository deletion complete\n`);
+		} else {
+			console.log(red`ECR Repository deletion aborted\n`);
 		}
+
+		console.log(blueBright`\nImgproxy post-destroy complete`);
 	} catch (error) {
 		if (error instanceof ExecaError) {
 			console.error(error.message);

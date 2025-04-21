@@ -28,7 +28,7 @@
 		"predeploy": "tsx ./bin/imgproxy-pre.ts deploy",
 		"deploy": "pnpm run build && npx aws-cdk deploy",
 		"postdeploy": "tsx ./bin/imgproxy-post.ts deploy",
-		"destroy": "pnpm run update-cdk && npx cdk destroy --force",
+		"destroy": "npx cdk destroy --force",
 		"postdestroy": "tsx ./bin/imgproxy-post.ts destroy",
 		"update-cdk": "npm install -g aws-cdk",
 		"typecheck": "tsc --noEmit",
