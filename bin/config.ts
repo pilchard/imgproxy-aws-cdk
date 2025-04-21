@@ -1,13 +1,10 @@
 import * as dotenv from "dotenv";
-import { $ } from "execa";
-import path, { resolve } from "node:path";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getOriginShieldRegion } from "../lib/origin-shield.js";
 
-import { white } from "ansis";
 import { RemovalPolicy } from "aws-cdk-lib";
 import { execSync } from "node:child_process";
-import type { UrlRewriteConfig } from "../functions/url-rewrite/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -103,7 +100,7 @@ function _getCurrentCommitHash(): string {
 	const gitRevParseResult = execSync("git rev-parse --short HEAD").toString().trim();
 
 	if (gitRevParseResult.startsWith("fatal:")) {
-		throw new Error(`Failed to retrieve current git commit hash with message: ${white`${gitRevParseResult}`}`);
+		throw new Error(`Failed to retrieve current git commit hash with message: ${gitRevParseResult}`);
 	}
 
 	return gitRevParseResult;
