@@ -1,6 +1,10 @@
 # Imgproxy with CloudFront
 
-<img src="architecture.png" width="900">
+<!-- <img src="architecture.png" width="900"> -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./architecture-dark.png">
+  <img alt="Text changing depending on mode. Light: 'So light!' Dark: 'So dark!'" src="./architecture.png">
+</picture>
 
 ## Deploy with AWS CDK
 
