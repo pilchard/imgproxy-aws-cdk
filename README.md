@@ -1,18 +1,18 @@
-# Imgproxy with CloudFront distribution
+# Imgproxy with CloudFront
 
 <img src="architecture.png" width="900">
 
-## Prepare for Deployment
-
-Before proceeding with deployment of the stack you will need to ensure the following:
-
-- **Docker** is installed on your machine. You'll need it to push the imgproxy image to the ECR repository. see: [Get Docker](https://docs.docker.com/get-started/get-docker/)
-
-- The **AWS CLI** is installed and configured on your machine. see: [AWS CLI install and update instructions](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions)
-
 ## Deploy with AWS CDK
 
-```shell
+### Prerequisites
+
+Before proceeding with deployment ensure the following:
+
+- **Docker** is installed on your machine. see: [Get Docker](https://docs.docker.com/get-started/get-docker/)
+
+- The **AWS CLI** is installed and configured. see: [AWS CLI install and update instructions](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions)
+
+```terminal
 git clone https://github.com/pilchard/imgproxy-aws-cdk.git
 cd imgproxy-aws-cdk
 pnpm install
@@ -100,10 +100,10 @@ The image tag you push here should match the one created in the prior command.
 docker push 123456789.dkr.ecr.us-east-1.amazonaws.com/imgproxy:latest
 ```
 
-</br>
+##### Reference Resources
 
-These instructions have been adapted from the imgproxy blog post
-[(Almost) free image processing with imgproxy and AWS Lambda](https://imgproxy.net/blog/almost-free-image-processing-with-imgproxy-and-aws-lambda/).
+AWS documentation: [Pushing a Docker image to an Amazon ECR private repository](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html)
+Imgproxy blog: [(Almost) free image processing with imgproxy and AWS Lambda](https://imgproxy.net/blog/almost-free-image-processing-with-imgproxy-and-aws-lambda/).
 
 ## License
 
