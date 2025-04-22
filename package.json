@@ -23,17 +23,15 @@
 		"imgproxy": "./bin/imgproxy.js"
 	},
 	"scripts": {
-		"watch": "tsc -w",
-		"test": "vitest",
 		"predeploy": "pnpm run build && tsx ./bin/imgproxy-pre.ts deploy",
-		"deploy": "npx aws-cdk deploy",
+		"deploy": "cdk deploy",
 		"postdeploy": "tsx ./bin/imgproxy-post.ts deploy",
-		"destroy": "npx cdk destroy --force",
+		"destroy": "cdk destroy --force",
 		"postdestroy": "tsx ./bin/imgproxy-post.ts destroy",
-		"update-cdk": "npm install -g aws-cdk",
 		"typecheck": "tsc --noEmit",
 		"build": "pnpm run typecheck && rm -rf ./.dist && pnpm run build:parcel",
-		"build:parcel": "parcel build"
+		"build:parcel": "parcel build",
+		"test": "vitest"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
@@ -56,9 +54,9 @@
 		"vitest": "^3.1.1"
 	},
 	"dependencies": {
-		"aws-cdk": "2.1001.0",
-		"aws-cdk-lib": "2.182.0",
-		"constructs": "^10.4.2",
+		"aws-cdk": "2.1010.0",
+		"aws-cdk-lib": "2.190.0",
+		"constructs": "10.4.2",
 		"source-map-support": "^0.5.21",
 		"cloudfront": "link:functions/url-rewrite/__mocks__/cloudfront"
 	},
