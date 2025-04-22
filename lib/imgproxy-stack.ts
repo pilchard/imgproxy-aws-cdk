@@ -46,6 +46,7 @@ export type AwsEnvStackProps = StackProps & { config: Readonly<ConfigProps>; };
 export class ImgproxyStack extends Stack {
 	constructor(scope: Construct, id: string, props: AwsEnvStackProps) {
 		super(scope, id, props);
+
 		const {
 			config: {
 				/** S T A C K */

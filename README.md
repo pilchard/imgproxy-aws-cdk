@@ -3,7 +3,7 @@
 <!-- <img src="architecture.png" width="900"> -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./architecture-dark.png">
-  <img alt="Text changing depending on mode. Light: 'So light!' Dark: 'So dark!'" src="./architecture.png">
+  <img alt="AWS diagram" src="./architecture.png">
 </picture>
 
 ## Deploy with AWS CDK
@@ -16,6 +16,8 @@ Before proceeding with deployment ensure the following:
 
 - The **AWS CLI** is installed and configured. see: [AWS CLI install and update instructions](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions)
 
+### Deploy
+
 ```terminal
 git clone https://github.com/pilchard/imgproxy-aws-cdk.git
 cd imgproxy-aws-cdk
@@ -26,7 +28,7 @@ cp .imgproxy.env.sample .imgproxy.env
 pnpm run deploy
 ```
 
-Follow the prompts in the terminal to complete deployment. A pre-deploy script will run to initialize or update the ECR repository and a post-deploy script will handle initialization of imgproxy signing parameters and sync configuration values from `.imgproxy.env` to SSM Parameters accessible by the Lambda Function.
+After installing dependencies and bootstrapping the CDK environment simply deploy and follow the prompts in the terminal. A pre-deploy script will run to initialize or update the ECR repository and a post-deploy script will handle initialization of imgproxy signing parameters and sync configuration values from `.imgproxy.env` to SSM Parameters accessible by the Lambda Function.
 
 Upon completion deployment details will be output in the terminal including demo links for the sample images included in the stack, as well as stack outputs such as the domain of the CloudFront distribution and the name of the default S3 bucket.
 

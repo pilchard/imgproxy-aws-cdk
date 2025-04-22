@@ -15,6 +15,20 @@ type EcrRepositoryResponseObject = {
 
 type EcrImageDetail = { repositoryName: string; imageTags: string[]; imagePushedAt: string; imageDigest: string; };
 
+// Check to see if the -f argument is present
+const args = process.argv.slice(2);
+const deployIndex = args.indexOf("deploy");
+const destroyIndex = args.indexOf("destroy");
+const action = deployIndex > -1 && deployIndex > destroyIndex ? "deploy" : destroyIndex > -1 ? "destroy" : undefined;
+
+const profileIndex = process.argv.indexOf("--profile");
+let profileValue: string | undefined;
+
+if (profileIndex > -1) {
+	// Retrieve the value after --custom
+	profileValue = process.argv[profileIndex + 1];
+}
+
 const {
 	CDK_DEPLOY_ACCOUNT,
 	CDK_DEPLOY_REGION,
@@ -23,7 +37,7 @@ const {
 	ECR_IMAGE_TAG,
 	ECR_MAX_IMAGES,
 	ECR_DOCKER_IMAGE_PATH,
-} = getConfig();
+} = getConfig(profileValue);
 
 async function destroy() {
 	const { stdout: callerIdentityJson } = await $`aws sts get-caller-identity --output json`;
@@ -78,6 +92,7 @@ async function deploy() {
 
 	// confirm deploy account and region
 	if (CDK_DEPLOY_ACCOUNT === undefined || CDK_DEPLOY_REGION === undefined) {
+		console.error(red`Unable to determine CDK_DEPLOY_ACCOUNT or CDK_DEPLOY_REGION`);
 		throw new Error("Unable to determine CDK_DEPLOY_ACCOUNT or CDK_DEPLOY_REGION");
 	}
 
@@ -264,7 +279,7 @@ async function deploy() {
 	}
 }
 
-switch (process.argv[2]) {
+switch (action) {
 	case "deploy": {
 		deploy();
 		break;

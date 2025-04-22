@@ -12,16 +12,16 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 let config: ConfigProps | undefined;
-export const getConfig = () => {
+export const getConfig = (profile?: string) => {
 	if (config === undefined) {
-		config = _initConfig();
+		config = _initConfig(profile);
 	}
 
 	return config;
 };
 
 // Initialize sta
-const _initConfig = (): ConfigProps => {
+const _initConfig = (profile?: string): ConfigProps => {
 	// defaults
 	const baseName = process.env.STACK_BASE_NAME || "imgproxy";
 	const stackNameDefault = `${baseName}-stack`;
@@ -29,6 +29,9 @@ const _initConfig = (): ConfigProps => {
 
 	// computed
 	const stackName = process.env.STACK_NAME || stackNameDefault;
+	// auth
+	const { acct: deployAccount, region: deployRegion } =
+		resolveDeployEnv(process.env.CDK_DEPLOY_ACCOUNT, process.env.CDK_DEPLOY_REGION, profile) ?? {};
 	// ecr
 	const ecrRepositoryName = process.env.ECR_REPOSITORY_NAME || baseName;
 	const ecrImageTag = getEcrImageTag(process.env.ECR_IMAGE_TAG) ?? "latest";
@@ -40,8 +43,8 @@ const _initConfig = (): ConfigProps => {
 	return {
 		// CDK
 		CDK_STACK_BASE_NAME: baseName,
-		CDK_DEPLOY_ACCOUNT: process.env.CDK_DEPLOY_ACCOUNT || process.env.CDK_DEFAULT_ACCOUNT,
-		CDK_DEPLOY_REGION: process.env.CDK_DEPLOY_REGION || process.env.CDK_DEFAULT_REGION,
+		CDK_DEPLOY_ACCOUNT: deployAccount,
+		CDK_DEPLOY_REGION: deployRegion,
 		// STACK
 		STACK_NAME: stackName,
 		// IMGPROXY
@@ -84,6 +87,71 @@ const _initConfig = (): ConfigProps => {
 		DEPLOY_SAMPLE_WEBSITE: parseBoolean(process.env.DEPLOY_SAMPLE_WEBSITE) ?? false,
 	};
 };
+
+/**
+ * ### Environment precedence with the AWS CDK
+ *
+ * If you use multiple methods of specifying environments, the AWS CDK adheres to the following
+ * precedence:
+ *
+ * 1. Hard-coded values specified with the env property of the Stack construct.
+ * 2. AWS_DEFAULT_ACCOUNT and AWS_DEFAULT_REGION environment variables specified with the env
+ * 		property of the Stack construct.
+ * 3. Environment information associated with the profile from your credentials and config files
+ * 		and passed to the CDK CLI using the --profile option.
+ * 4. The default profile from your credentials and config files.
+ */
+function resolveDeployEnv(
+	acct: string | undefined,
+	region: string | undefined,
+	profile?: string,
+): { acct: string; region: string; } | undefined {
+	if (acct?.trim().toLocaleLowerCase() && region?.trim().toLocaleLowerCase()) {
+		return { acct, region };
+	}
+
+	const acctCmd = "aws configure get sso_account_id";
+	const regionCmd = "aws configure get region";
+
+	// passed profile name
+	if (profile !== undefined) {
+		try {
+			const profileAcct = execSync(`${acctCmd} --profile ${profile}`).toString().trim();
+			const profileRegion = execSync(`${regionCmd} --profile ${profile}`).toString().trim();
+
+			if (profileAcct && profileRegion) {
+				return { acct: profileAcct, region: profileRegion };
+			}
+		} catch (error) {
+			// console.error(The config profile (${profile}) could not be found`);
+			throw new Error(`The config profile (${profile}) could not be found`, { cause: error });
+		}
+	}
+
+	// default sso
+	try {
+		const defaultAcct = execSync(acctCmd).toString().trim();
+		const defaultRegion = execSync(regionCmd).toString().trim();
+
+		if (defaultAcct && defaultRegion) {
+			return { acct: defaultAcct, region: defaultRegion };
+		}
+	} catch (error) {
+		console.error("A default config profile could not be found");
+	}
+
+	console.log("Checking for AWS_DEFAULT values...");
+
+	// AWS_DEFAULTS
+	const defaultAcct = process.env.AWS_DEFAULT_ACCOUNT;
+	const defaultRegion = process.env.AWS_DEFAULT_REGION;
+
+	if (defaultAcct && defaultRegion) {
+		return { acct: defaultAcct, region: defaultRegion };
+	}
+
+	throw new Error("Failed to resolve deploy account or region");
+}
 
 function getEcrImageTag(str: string | undefined): string | undefined {
 	const _str = str?.trim().toLocaleLowerCase();
