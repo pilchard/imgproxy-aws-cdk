@@ -2,7 +2,7 @@ import { bgBlueBright, blueBright, greenBright, red, white, yellowBright } from 
 import { $ } from "execa";
 import { getConfig, type ConfigProps } from "./config.ts";
 
-type EcrRepositoryResponseObject = {
+export type EcrRepositoryResponseObject = {
 	createdAt?: string;
 	encryptionConfiguration?: { encryptionType: "AES256" | "KMS" | "KMS_DSSE"; kmsKey?: string; };
 	imageScanningConfiguration?: { scanOnPush?: boolean; };
@@ -13,7 +13,46 @@ type EcrRepositoryResponseObject = {
 	repositoryUri?: string;
 };
 
-type EcrImageDetail = { repositoryName: string; imageTags: string[]; imagePushedAt: string; imageDigest: string; };
+export type EcrRepositoryLifecyclePolicyRule = {
+	rulePriority: number;
+	description: string;
+	selection: {
+		tagStatus: "untagged" | "any";
+		countType: "imageCountMoreThan" | "sinceImagePushed";
+		countUnit?: "string";
+		countNumber: number;
+	};
+	action: { type: "expire"; };
+} | {
+	rulePriority: number;
+	description: "string";
+	selection: {
+		tagStatus: "tagged";
+		tagPatternList: string[];
+		countType: "imageCountMoreThan" | "sinceImagePushed";
+		countUnit?: "string";
+		countNumber: number;
+	};
+	action: { type: "expire"; };
+} | {
+	rulePriority: number;
+	description: "string";
+	selection: {
+		tagStatus: "tagged";
+		tagPrefixList: string[];
+		countType: "imageCountMoreThan" | "sinceImagePushed";
+		countUnit?: "string";
+		countNumber: number;
+	};
+	action: { type: "expire"; };
+};
+
+export type EcrImageDetail = {
+	repositoryName: string;
+	imageTags: string[];
+	imagePushedAt: string;
+	imageDigest: string;
+};
 
 export async function preDeploy() {
 	console.log(bgBlueBright`\nImgproxy pre-deploy\n`);
@@ -71,27 +110,9 @@ export async function preDeploy() {
 	}
 	console.log(greenBright`AWS CLI installed`);
 
-	// MOVED TO CONFIG
-	// // confirm deploy account and region
-	// if (CDK_DEPLOY_ACCOUNT === undefined || CDK_DEPLOY_REGION === undefined) {
-	// 	console.error(red`Unable to determine CDK_DEPLOY_ACCOUNT or CDK_DEPLOY_REGION`);
-	// 	throw new Error("Unable to determine CDK_DEPLOY_ACCOUNT or CDK_DEPLOY_REGION");
-	// }
-
-	// // confirm cli caller account identity
-	// const { stdout: callerIdentityJson } = await $`aws sts get-caller-identity --output json`;
-	// const { Account: callerAccount } = JSON.parse(callerIdentityJson);
-
-	// if (callerAccount !== CDK_DEPLOY_ACCOUNT) {
-	// 	console.error(
-	// 		red`CLI must be logged in with the account being deployed to. Expected ${white`${CDK_DEPLOY_ACCOUNT}`} but received ${white`${callerAccount}`}`,
-	// 	);
-	// 	return;
-	// }
-
 	try {
 		/** create ECR repository */
-		let imgproxyEcrRepo: EcrRepositoryResponseObject;
+		let imgproxyEcrRepository: EcrRepositoryResponseObject;
 		try {
 			console.log("\nChecking ECR repositories...");
 			const { stdout: existingRepositoriesJson } = await $`aws ecr describe-repositories \
@@ -105,22 +126,38 @@ export async function preDeploy() {
 			);
 
 			if (retrievedImgproxyRepository !== undefined) {
-				imgproxyEcrRepo = retrievedImgproxyRepository;
+				imgproxyEcrRepository = retrievedImgproxyRepository;
 
 				console.log(greenBright`ECR repository with name '${ECR_REPOSITORY_NAME}' found`);
 			} else {
 				console.log(yellowBright`ECR repository with name '${ECR_REPOSITORY_NAME}' not found`);
+
 				console.log(white`\nCreating new ECR repository...`);
-				const { stdout: imgproxyEcrRepoJson } = await $`aws ecr create-repository \
+				const { stdout: createdEcrRepositoryJson } = await $`aws ecr create-repository \
 					--repository-name ${ECR_REPOSITORY_NAME} \
 					--encryption-configuration encryptionType=AES256 \
 					--image-tag-mutability IMMUTABLE \
     				--image-scanning-configuration scanOnPush=false \
 					--output json`;
 
-				imgproxyEcrRepo = JSON.parse(imgproxyEcrRepoJson);
+				const { repository: createdEcrRepository }: { repository: EcrRepositoryResponseObject; } = JSON.parse(
+					createdEcrRepositoryJson,
+				);
+				imgproxyEcrRepository = createdEcrRepository;
 
-				console.log(imgproxyEcrRepo);
+				// Lifecycle Policy Rules
+				const ecrLifecyclePolicyRules: EcrRepositoryLifecyclePolicyRule[] = [];
+				const imgproxyMaxImageLifecyclePolicyRule: EcrRepositoryLifecyclePolicyRule = {
+					rulePriority: 1,
+					description: "Imgproxy max images",
+					selection: { tagStatus: "any", countType: "imageCountMoreThan", countNumber: ECR_MAX_IMAGES },
+					action: { type: "expire" },
+				};
+				ecrLifecyclePolicyRules.push(imgproxyMaxImageLifecyclePolicyRule);
+
+				const { stdout: _imgproxyEcrRepoLifecyclePoliciesJson } = await $`aws ecr put-lifecycle-policy \
+            		--repository-name ${ECR_REPOSITORY_NAME} \
+            		--lifecycle-policy-text '${JSON.stringify({ rules: ecrLifecyclePolicyRules })}'`;
 
 				console.log(greenBright`Successfully created ECR repository`);
 			}
@@ -216,39 +253,10 @@ export async function preDeploy() {
 
 		console.log(greenBright`Successfully deployed imgproxy Docker image`);
 
-		// prune images to ECR_MAX_IMAGES
-		const { stdout: allImagesJson } = await $`aws ecr describe-images \
-							--repository-name ${ECR_REPOSITORY_NAME} \
-							--output json`;
-
-		const { imageDetails: allImages }: { imageDetails: EcrImageDetail[]; } = JSON.parse(allImagesJson);
-
-		if (allImages.length > ECR_MAX_IMAGES) {
-			console.log(`\nPruning images to max of ${ECR_MAX_IMAGES}...`);
-			console.log(
-				`Removing ${allImages.length - ECR_MAX_IMAGES} ${
-					allImages.length - ECR_MAX_IMAGES === 1 ? "image" : "images"
-				}`,
-			);
-
-			const deleteImages = allImages.sort((a, b) => b.imagePushedAt.localeCompare(a.imagePushedAt)).slice(
-				ECR_MAX_IMAGES,
-			);
-
-			for (const image of deleteImages) {
-				console.log(red`- imageDigest: ${image.imageDigest}`);
-
-				await $`aws ecr batch-delete-image \
-							--repository-name ${ECR_REPOSITORY_NAME} \
-							--image-ids imageDigest=${image.imageDigest}`;
-			}
-
-			console.log(greenBright`Successfully pruned images`);
-		}
-
 		console.log(blueBright`\nImgproxy pre-deploy complete\n`);
 		console.log(`  Docker image path: ${ECR_DOCKER_IMAGE_PATH}`);
 		console.log(`  ECR image path: ${awsEcrImagePath}`);
+		console.log(`  ECR repository arn: ${imgproxyEcrRepository.repositoryArn}`);
 	} catch (error) {
 		if (error instanceof Error) {
 			console.error(red`${error.message}`);
