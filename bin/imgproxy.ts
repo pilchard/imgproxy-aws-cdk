@@ -1,34 +1,27 @@
 #!/usr/bin/env node
 import "source-map-support/register";
-import { red } from "ansis";
+import { bgBlueBright, red } from "ansis";
 import * as cdk from "aws-cdk-lib";
 import { ImgproxyStack } from "../lib/imgproxy-stack";
 import { getConfig } from "./config";
-import { deploy as preDeploy } from "./imgproxy-pre";
 
 import type { AwsEnvStackProps } from "../lib/imgproxy-stack";
 import type { ConfigProps } from "./config";
 
-const profileIndex = process.argv.indexOf("--profile");
-let profileValue: string | undefined;
-
-if (profileIndex > -1) {
-	profileValue = process.argv[profileIndex + 1];
-}
-
 async function _deploy() {
+	console.log(bgBlueBright`\nCDK Deploy\n`);
+
 	let config: ConfigProps;
 
 	try {
-		config = getConfig(profileValue);
+		config = getConfig();
 	} catch (error) {
 		if (error instanceof Error) {
-			console.error(red`${error.message}`);
+			console.error(red`\n${error.message}\n`);
+			throw error;
 		}
-		return;
+		throw new Error("Configuration failed");
 	}
-
-	await preDeploy(config);
 
 	const stackProps: AwsEnvStackProps = {
 		env: {
