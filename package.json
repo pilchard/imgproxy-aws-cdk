@@ -23,10 +23,11 @@
 		"imgproxy": "./bin/imgproxy.js"
 	},
 	"scripts": {
+		"predeploy": "tsx ./bin/imgproxy-deploy-pre.ts",
 		"deploy": "cdk deploy",
-
+		"postdeploy": "tsx ./bin/imgproxy-deploy-post.ts",
 		"destroy": "cdk destroy --force",
-		"postdestroy": "tsx ./bin/imgproxy-post.ts destroy",
+		"postdestroy": "tsx ./bin/imgproxy-destroy-post.ts ",
 		"typecheck": "tsc --noEmit",
 		"build": "pnpm run typecheck && rm -rf ./.dist && pnpm run build:parcel",
 		"build:parcel": "parcel build",

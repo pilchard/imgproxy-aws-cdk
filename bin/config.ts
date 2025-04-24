@@ -13,10 +13,10 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 let config: ConfigProps | undefined;
-export const getConfig = (profile?: string) => {
+export const getConfig = () => {
 	if (config === undefined) {
 		try {
-			config = _initConfig(profile);
+			config = _initConfig();
 		} catch (error) {
 			throw new Error("Configuration failed");
 		}
@@ -26,8 +26,10 @@ export const getConfig = (profile?: string) => {
 };
 
 // Initialize sta
-const _initConfig = (profile?: string): ConfigProps => {
-	console.log(blueBright`Initializing deploy configuration\n`);
+const _initConfig = (): ConfigProps => {
+	console.log(blueBright`Initializing deploy configuration...\n`);
+
+	const deployProfile = process.env.CDK_DEPLOY_PROFILE || process.env.AWS_PROFILE;
 
 	let deployAccount: string;
 	let deployRegion: string;
@@ -35,11 +37,11 @@ const _initConfig = (profile?: string): ConfigProps => {
 		const resolvedDeployEnv = resolveDeployEnv(
 			process.env.CDK_DEPLOY_ACCOUNT,
 			process.env.CDK_DEPLOY_REGION,
-			profile,
+			deployProfile,
 		);
 		({ acct: deployAccount, region: deployRegion } = resolvedDeployEnv);
 
-		console.log(white`  Account: ${deployAccount}`);
+		console.log(white`\n  Account: ${deployAccount}`);
 		console.log(white`  Region: ${deployRegion}`);
 	} catch (error) {
 		if (error instanceof Error) {
@@ -246,11 +248,19 @@ function _validateCallerPermissions(acct: string, _region: string, profile?: str
 		const { Account: callerAccount } = JSON.parse(callerIdentityJson);
 
 		if (callerAccount !== acct) {
-			throw red`CLI must be logged in with the account being deployed to. Expected ${white`${acct}`} but received ${white`${callerAccount}`}`;
+			const errorMessage =
+				red`CLI must be logged in with the account being deployed to. Expected ${white`${acct}`} but received ${white`${callerAccount}`}`;
+			console.log(errorMessage);
+
+			console.error(white`\n  If you are logged in using SSO ensure one of the following:\n`);
+			console.error(white`    - The AWS_PROFILE env variable is set with the relevant profile\n`);
+			console.error(cyan`        ${gray`$`} export AWS_PROFIle="profile-name"\n`);
+			console.error(white`    - The CDK_DEPLOY_PROFILE value specified in ${"`./.env`"} is correct\n`);
+
+			throw errorMessage;
 		}
 	} catch (e) {
 		if (typeof e === "string") {
-			console.error(red`${e}`);
 			throw new Error(e);
 		}
 		if (e instanceof Error) {
