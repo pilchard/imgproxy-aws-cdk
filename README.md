@@ -18,21 +18,39 @@ Before proceeding with deployment ensure the following:
 
 ### Deploy
 
+#### 1. Pull repository and install node modules
+
 ```terminal
 git clone https://github.com/pilchard/imgproxy-aws-cdk.git
 cd imgproxy-aws-cdk
 pnpm install
-cdk bootstrap
+```
+
+#### 2. Copy sample `.env` files into place
+
+```terminal
 cp .env.sample .env
 cp .imgproxy.env.sample .imgproxy.env
+```
+
+> [!NOTE]
+> Deploying without editing `.env` will read deploy target `account` and `region` from the default profile in `~/.aws/config` (the default profile may be overridden by `AWS_PROFILE` if it is set).
+
+> [!TIP]
+> Set the `CDK_DEPLOY_PROFILE` value in `.env` to read the deploy target `account` and `region` from a non-default profile in `~/.aws/config`.
+
+#### 3. Bootstrap CDK environment and deploy
+
+```terminal
+cdk bootstrap
 pnpm run deploy
 ```
 
-The project can be deployed as pulled using reasonable defaults after package installation and CDK bootstrapping. If not specified in the `./.env`, deploy target `account` and `region` will be read from the default profile in `~/.aws/config` (the default profile may be overridden by `AWS_PROFILE` if it is set).
+A pre-deploy script will run to initialize or update the ECR repository.
 
-A pre-deploy script will run to initialize or update the ECR repository and a post-deploy script will handle initialization of imgproxy signing parameters and sync configuration values from `.imgproxy.env` to SSM Parameters accessible by the Lambda Function.
+A post-deploy script will handle initialization of imgproxy signing parameters and sync configuration values from `.imgproxy.env` to SSM Parameters accessible by the Lambda Function.
 
-Upon completion deployment details will be output in the terminal including demo links for the sample images included in the stack, as well as stack outputs such as the domain of the CloudFront distribution and the name of the default S3 bucket.
+Upon completion, deployment details will be output in the terminal including demo links for the sample images included in the stack, as well as stack outputs such as the domain of the CloudFront distribution and the name of the default S3 bucket.
 
 ## Configuration
 
