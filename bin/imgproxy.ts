@@ -1,24 +1,49 @@
 #!/usr/bin/env node
 import "source-map-support/register";
+import { red } from "ansis";
 import * as cdk from "aws-cdk-lib";
 import { ImgproxyStack } from "../lib/imgproxy-stack";
 import { getConfig } from "./config";
+import { deploy as preDeploy } from "./imgproxy-pre";
 
 import type { AwsEnvStackProps } from "../lib/imgproxy-stack";
+import type { ConfigProps } from "./config";
 
-const config = getConfig();
+const profileIndex = process.argv.indexOf("--profile");
+let profileValue: string | undefined;
 
-const stackProps: AwsEnvStackProps = {
-	env: {
-		account: config.CDK_DEPLOY_ACCOUNT, // || process.env.CDK_DEFAULT_ACCOUNT || "specify_account",
-		region: config.CDK_DEPLOY_REGION, // || process.env.CDK_DEFAULT_REGION || "us-east-1",
-	},
-	config: config,
-};
+if (profileIndex > -1) {
+	profileValue = process.argv[profileIndex + 1];
+}
 
-const app = new cdk.App();
+async function _deploy() {
+	let config: ConfigProps;
 
-new ImgproxyStack(app, config.STACK_NAME, stackProps);
+	try {
+		config = getConfig(profileValue);
+	} catch (error) {
+		if (error instanceof Error) {
+			console.error(red`${error.message}`);
+		}
+		return;
+	}
+
+	await preDeploy(config);
+
+	const stackProps: AwsEnvStackProps = {
+		env: {
+			account: config.CDK_DEPLOY_ACCOUNT, // || process.env.CDK_DEFAULT_ACCOUNT || "specify_account",
+			region: config.CDK_DEPLOY_REGION, // || process.env.CDK_DEFAULT_REGION || "us-east-1",
+		},
+		config: config,
+	};
+
+	const app = new cdk.App();
+
+	new ImgproxyStack(app, config.STACK_NAME, stackProps);
+}
+
+_deploy();
 
 /**
  * @see: https://yshen4.github.io/infrastructure/AWS/CDK_context.html

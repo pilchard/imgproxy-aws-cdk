@@ -1,6 +1,6 @@
 import { blueBright, greenBright, red, white, yellowBright } from "ansis";
 import { $ } from "execa";
-import { getConfig } from "./config.ts";
+import { getConfig, type ConfigProps } from "./config.ts";
 
 type EcrRepositoryResponseObject = {
 	createdAt?: string;
@@ -15,47 +15,60 @@ type EcrRepositoryResponseObject = {
 
 type EcrImageDetail = { repositoryName: string; imageTags: string[]; imagePushedAt: string; imageDigest: string; };
 
-// Check to see if the -f argument is present
-const args = process.argv.slice(2);
-const deployIndex = args.indexOf("deploy");
-const destroyIndex = args.indexOf("destroy");
-const action = deployIndex > -1 && deployIndex > destroyIndex ? "deploy" : destroyIndex > -1 ? "destroy" : undefined;
+// const args = process.argv.slice(2);
+// const deployIndex = args.indexOf("deploy");
+// const destroyIndex = args.indexOf("destroy");
+// const action = Math.max(deployIndex, destroyIndex) > -1 ? args[Math.max(deployIndex, destroyIndex)] : undefined;
 
-const profileIndex = process.argv.indexOf("--profile");
-let profileValue: string | undefined;
+// const profileIndex = process.argv.indexOf("--profile");
+// let profileValue: string | undefined;
 
-if (profileIndex > -1) {
-	// Retrieve the value after --custom
-	profileValue = process.argv[profileIndex + 1];
-}
+// if (profileIndex > -1) {
+// 	profileValue = process.argv[profileIndex + 1];
+// }
 
-const {
-	CDK_DEPLOY_ACCOUNT,
-	CDK_DEPLOY_REGION,
-	ECR_CREATE_REPOSITORY,
-	ECR_REPOSITORY_NAME,
-	ECR_IMAGE_TAG,
-	ECR_MAX_IMAGES,
-	ECR_DOCKER_IMAGE_PATH,
-} = getConfig(profileValue);
+// async function destroy() {
+// 	let config: ConfigProps;
 
-async function destroy() {
-	const { stdout: callerIdentityJson } = await $`aws sts get-caller-identity --output json`;
-	const { Account: callerAccount } = JSON.parse(callerIdentityJson);
+// 	try {
+// 		config = getConfig(profileValue);
+// 	} catch (error) {
+// 		if (error instanceof Error) {
+// 			console.error(red`${error.message}`);
+// 		}
+// 		return;
+// 	}
 
-	if (callerAccount !== CDK_DEPLOY_ACCOUNT) {
-		console.error(
-			red`CLI must be invoked with the account being deployed to. Expected ${white`${CDK_DEPLOY_ACCOUNT}`} but received ${white`${callerAccount}`}`,
-		);
-		return;
-	}
+// 	const { CDK_DEPLOY_ACCOUNT } = config;
+// 	console.log(CDK_DEPLOY_ACCOUNT);
 
-	/** @todo
-	 * empty and destroy ECR repository
-	 */
-}
+// 	/** @todo
+// 	 * empty and destroy ECR repository
+// 	 */
+// }
 
-async function deploy() {
+export async function deploy(config: ConfigProps) {
+	// let config: ConfigProps;
+
+	// try {
+	// 	config = getConfig(profileValue);
+	// } catch (error) {
+	// 	if (error instanceof Error) {
+	// 		console.error(red`${error.message}`);
+	// 	}
+	// 	return;
+	// }
+
+	const {
+		CDK_DEPLOY_ACCOUNT,
+		CDK_DEPLOY_REGION,
+		ECR_CREATE_REPOSITORY,
+		ECR_REPOSITORY_NAME,
+		ECR_IMAGE_TAG,
+		ECR_MAX_IMAGES,
+		ECR_DOCKER_IMAGE_PATH,
+	} = config;
+
 	console.log(blueBright`\nImgproxy pre-deploy...`);
 
 	if (!ECR_CREATE_REPOSITORY) {
@@ -90,22 +103,23 @@ async function deploy() {
 	}
 	console.log(greenBright`AWS CLI installed`);
 
-	// confirm deploy account and region
-	if (CDK_DEPLOY_ACCOUNT === undefined || CDK_DEPLOY_REGION === undefined) {
-		console.error(red`Unable to determine CDK_DEPLOY_ACCOUNT or CDK_DEPLOY_REGION`);
-		throw new Error("Unable to determine CDK_DEPLOY_ACCOUNT or CDK_DEPLOY_REGION");
-	}
+	// MOVED TO CONFIG
+	// // confirm deploy account and region
+	// if (CDK_DEPLOY_ACCOUNT === undefined || CDK_DEPLOY_REGION === undefined) {
+	// 	console.error(red`Unable to determine CDK_DEPLOY_ACCOUNT or CDK_DEPLOY_REGION`);
+	// 	throw new Error("Unable to determine CDK_DEPLOY_ACCOUNT or CDK_DEPLOY_REGION");
+	// }
 
-	// confirm cli caller account identity
-	const { stdout: callerIdentityJson } = await $`aws sts get-caller-identity --output json`;
-	const { Account: callerAccount } = JSON.parse(callerIdentityJson);
+	// // confirm cli caller account identity
+	// const { stdout: callerIdentityJson } = await $`aws sts get-caller-identity --output json`;
+	// const { Account: callerAccount } = JSON.parse(callerIdentityJson);
 
-	if (callerAccount !== CDK_DEPLOY_ACCOUNT) {
-		console.error(
-			red`CLI must be logged in with the account being deployed to. Expected ${white`${CDK_DEPLOY_ACCOUNT}`} but received ${white`${callerAccount}`}`,
-		);
-		return;
-	}
+	// if (callerAccount !== CDK_DEPLOY_ACCOUNT) {
+	// 	console.error(
+	// 		red`CLI must be logged in with the account being deployed to. Expected ${white`${CDK_DEPLOY_ACCOUNT}`} but received ${white`${callerAccount}`}`,
+	// 	);
+	// 	return;
+	// }
 
 	try {
 		/** create ECR repository */
@@ -279,13 +293,13 @@ async function deploy() {
 	}
 }
 
-switch (action) {
-	case "deploy": {
-		deploy();
-		break;
-	}
-	case "destroy": {
-		destroy();
-		break;
-	}
-}
+// switch (action) {
+// 	case "deploy": {
+// 		await deploy();
+// 		break;
+// 	}
+// 	case "destroy": {
+// 		destroy();
+// 		break;
+// 	}
+// }

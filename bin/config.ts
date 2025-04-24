@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getOriginShieldRegion } from "../lib/origin-shield.js";
 
+import { blueBright, cyan, gray, greenBright, red, white, whiteBright, yellowBright } from "ansis";
 import { RemovalPolicy } from "aws-cdk-lib";
 import { execSync } from "node:child_process";
 
@@ -14,7 +15,11 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 let config: ConfigProps | undefined;
 export const getConfig = (profile?: string) => {
 	if (config === undefined) {
-		config = _initConfig(profile);
+		try {
+			config = _initConfig(profile);
+		} catch (error) {
+			throw new Error("Configuration failed");
+		}
 	}
 
 	return config;
@@ -22,6 +27,27 @@ export const getConfig = (profile?: string) => {
 
 // Initialize sta
 const _initConfig = (profile?: string): ConfigProps => {
+	console.log(blueBright`Initializing deploy configuration\n`);
+
+	let deployAccount: string;
+	let deployRegion: string;
+	try {
+		const resolvedDeployEnv = resolveDeployEnv(
+			process.env.CDK_DEPLOY_ACCOUNT,
+			process.env.CDK_DEPLOY_REGION,
+			profile,
+		);
+		({ acct: deployAccount, region: deployRegion } = resolvedDeployEnv);
+
+		console.log(white`  Account: ${deployAccount}`);
+		console.log(white`  Region: ${deployRegion}`);
+	} catch (error) {
+		if (error instanceof Error) {
+			throw error;
+		}
+		throw new Error("Failed to resolve deploy environment", { cause: error });
+	}
+
 	// defaults
 	const baseName = process.env.STACK_BASE_NAME || "imgproxy";
 	const stackNameDefault = `${baseName}-stack`;
@@ -29,9 +55,7 @@ const _initConfig = (profile?: string): ConfigProps => {
 
 	// computed
 	const stackName = process.env.STACK_NAME || stackNameDefault;
-	// auth
-	const { acct: deployAccount, region: deployRegion } =
-		resolveDeployEnv(process.env.CDK_DEPLOY_ACCOUNT, process.env.CDK_DEPLOY_REGION, profile) ?? {};
+
 	// ecr
 	const ecrRepositoryName = process.env.ECR_REPOSITORY_NAME || baseName;
 	const ecrImageTag = getEcrImageTag(process.env.ECR_IMAGE_TAG) ?? "latest";
@@ -91,35 +115,43 @@ const _initConfig = (profile?: string): ConfigProps => {
 /**
  * ### Environment precedence with the AWS CDK
  *
- * If you use multiple methods of specifying environments, the AWS CDK adheres to the following
- * precedence:
+ * There are multiple methods of specifying deploy environment values (Account ID, Region). The project adheres
+ * to the following precedence:
  *
- * 1. Hard-coded values specified with the env property of the Stack construct.
- * 2. AWS_DEFAULT_ACCOUNT and AWS_DEFAULT_REGION environment variables specified with the env
- * 		property of the Stack construct.
- * 3. Environment information associated with the profile from your credentials and config files
- * 		and passed to the CDK CLI using the --profile option.
- * 4. The default profile from your credentials and config files.
+ * 1. Hard-coded values specified in the project `.env` file.
+ * 2. Environment information associated with the profile from your `.aws/credentials` and `.aws/config` files
+ * 		and passed to the deploy script using the `--profile` option.
+ * 3. The default profile from your `.aws/credentials` and `.aws/config` files.
+ * 4. AWS_DEFAULT_ACCOUNT and AWS_DEFAULT_REGION environment variables available in the shell.
  */
 function resolveDeployEnv(
 	acct: string | undefined,
 	region: string | undefined,
 	profile?: string,
-): { acct: string; region: string; } | undefined {
+): { acct: string; region: string; } | never {
+	console.log(whiteBright`Resolving deploy env...`);
+
+	/** 1. Hard-coded values specified in the project `.env` file. */
 	if (acct?.trim().toLocaleLowerCase() && region?.trim().toLocaleLowerCase()) {
+		_validateCallerPermissions(acct, region, profile);
+
+		console.log(greenBright`Using values specified in ${"`./.env`"}`);
 		return { acct, region };
 	}
 
 	const acctCmd = "aws configure get sso_account_id";
 	const regionCmd = "aws configure get region";
 
-	// passed profile name
+	/** 2. Environment information associated with the profile from your `.aws/credentials` and `.aws/config` files and passed to the deploy script using the `--profile` option. */
 	if (profile !== undefined) {
 		try {
 			const profileAcct = execSync(`${acctCmd} --profile ${profile}`).toString().trim();
 			const profileRegion = execSync(`${regionCmd} --profile ${profile}`).toString().trim();
 
 			if (profileAcct && profileRegion) {
+				_validateCallerPermissions(profileAcct, profileRegion, profile);
+
+				console.log(greenBright`Using config values for profile ${profile}`);
 				return { acct: profileAcct, region: profileRegion };
 			}
 		} catch (error) {
@@ -128,29 +160,109 @@ function resolveDeployEnv(
 		}
 	}
 
-	// default sso
+	/** 3. The default profile from your `.aws/credentials` and `.aws/config` files. */
 	try {
-		const defaultAcct = execSync(acctCmd).toString().trim();
-		const defaultRegion = execSync(regionCmd).toString().trim();
+		const defaultCredAcct = execSync(acctCmd).toString().trim();
+		const defaultCredRegion = execSync(regionCmd).toString().trim();
 
-		if (defaultAcct && defaultRegion) {
-			return { acct: defaultAcct, region: defaultRegion };
+		if (defaultCredAcct && defaultCredRegion) {
+			_validateCallerPermissions(defaultCredAcct, defaultCredRegion, profile);
+
+			console.log(greenBright`Using default config values`);
+			return { acct: defaultCredAcct, region: defaultCredRegion };
 		}
 	} catch (error) {
-		console.error("A default config profile could not be found");
+		console.error(yellowBright`A default config profile could not be found`);
 	}
 
 	console.log("Checking for AWS_DEFAULT values...");
 
-	// AWS_DEFAULTS
-	const defaultAcct = process.env.AWS_DEFAULT_ACCOUNT;
-	const defaultRegion = process.env.AWS_DEFAULT_REGION;
+	/** 4. AWS_DEFAULT_ACCOUNT and AWS_DEFAULT_REGION environment variables available in the shell. */
+	const defaultEnvAcct = process.env.AWS_DEFAULT_ACCOUNT;
+	const defaultEnvRegion = process.env.AWS_DEFAULT_REGION;
 
-	if (defaultAcct && defaultRegion) {
-		return { acct: defaultAcct, region: defaultRegion };
+	if (defaultEnvAcct && defaultEnvRegion) {
+		_validateCallerPermissions(defaultEnvAcct, defaultEnvRegion, profile);
+
+		console.log(greenBright`Using AWS_DEFAULT_ACCOUNT and AWS_DEFAULT_REGION`);
+		return { acct: defaultEnvAcct, region: defaultEnvRegion };
 	}
 
+	console.warn(yellowBright`AWS_DEFAULTS not found`);
+	console.error(red`\nFailed to resolve deploy account or region`);
+
+	console.info(white`\nThere are multiple methods of specifying environments (Account ID, Region).`);
+	console.info(white`Ensure that you do one of the following before continuing:`);
+
+	console.info(white`\n> Hard-code deploy env values in the project .env file.\n`);
+	console.info(gray`  # ./.env\n`);
+	console.info(cyan`  CDK_DEPLOY_ACCOUNT${white`=000111222333`}`);
+	console.info(cyan`  CDK_DEPLOY_REGION${white`=us-east-1`}\n`);
+
+	console.info(
+		white`\n> Configure the AWS CLI with a named profile matching the one passed to deploy ('pnpm run deploy --profile <profile-name>)\n`,
+	);
+	console.info(white`  Interactive\n`);
+	console.info(cyan`  ${gray`$`} aws configure`);
+
+	console.info(white`\n  Manual [named]\n`);
+	console.info(cyan`  ${gray`$`} aws configure set sso_account_id 000111222333 --profile profile-name`);
+	console.info(cyan`  ${gray`$`} aws configure set region us-east-1 --profile profile-name`);
+
+	console.info(white`\n> Configure the AWS CLI with a default profile\n`);
+
+	console.info(white`  Manual [default]\n`);
+	console.info(cyan`  ${gray`$`} aws configure set sso_account_id 000111222333`);
+	console.info(cyan`  ${gray`$`} aws configure set region us-east-1`);
+
+	console.info(white`\n  Specify a named profile as default by setting the AWS_PROFILE environment variable\n`);
+	console.info(cyan`  ${gray`$`} export AWS_PROFILE="existing-profile-name"`);
+
+	console.info(
+		white`\n> Make the AWS_DEFAULT_ACCOUNT and AWS_DEFAULT_REGION environment variables available in the shell.\n`,
+	);
+	console.info(cyan`  ${gray`$`} export AWS_DEFAULT_REGION="111122223333"`);
+	console.info(cyan`  ${gray`$`} export AWS_DEFAULT_ACCOUNT="us-east-1"\n`);
+
+	console.info(white`See the documentation for more details.\n`);
+	console.info(
+		white`  CLI configuration: ${cyan`https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html\n`}`,
+	);
+	console.info(
+		white`  CLI env variables: ${cyan`https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html\n`}`,
+	);
+
 	throw new Error("Failed to resolve deploy account or region");
+}
+
+function _validateCallerPermissions(acct: string, _region: string, profile?: string) {
+	// confirm cli caller account identity
+	// const { stdout: callerIdentityJson } = await $`aws sts get-caller-identity --output json`;
+	try {
+		const callerIdentityJson = execSync(
+			`aws sts get-caller-identity${profile ? ` --profile ${profile}` : ""} --output json`,
+			{ stdio: "pipe", encoding: "utf8" },
+		);
+		const { Account: callerAccount } = JSON.parse(callerIdentityJson);
+
+		if (callerAccount !== acct) {
+			throw red`CLI must be logged in with the account being deployed to. Expected ${white`${acct}`} but received ${white`${callerAccount}`}`;
+		}
+	} catch (e) {
+		if (typeof e === "string") {
+			console.error(red`${e}`);
+			throw new Error(e);
+		}
+		if (e instanceof Error) {
+			console.error(red`\n${e.message}\n`);
+			console.error(white`  If you are logged in using SSO ensure one of the following:\n`);
+			console.error(white`    - The AWS_PROFILE env variable is set with the relevant profile\n`);
+			console.error(cyan`        ${gray`$`} export AWS_PROFIle="profile-name"\n`);
+			console.error(white`    - The necessary credentials are available in ${"`~/.aws/credentials`"}\n`);
+		}
+
+		throw new Error("Validation failed");
+	}
 }
 
 function getEcrImageTag(str: string | undefined): string | undefined {
@@ -244,8 +356,8 @@ export type ConfigProps = {
 	 */
 	readonly STACK_NAME: string;
 	readonly CDK_STACK_BASE_NAME: string;
-	readonly CDK_DEPLOY_ACCOUNT?: string | undefined;
-	readonly CDK_DEPLOY_REGION?: string | undefined;
+	readonly CDK_DEPLOY_ACCOUNT: string;
+	readonly CDK_DEPLOY_REGION: string;
 
 	// I M G P R O X Y
 	//
