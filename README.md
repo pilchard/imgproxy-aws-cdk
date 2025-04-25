@@ -1,4 +1,4 @@
-# Imgproxy with CloudFront
+# Imgproxy with AWS CloudFront
 
 <!-- <img src="architecture.png" width="900"> -->
 <picture>
@@ -12,7 +12,7 @@
 
 Before proceeding with deployment ensure the following:
 
-- **Docker** is installed on your machine. see: [Get Docker](https://docs.docker.com/get-started/get-docker/)
+- **Docker** is installed and configured. see: [Get Docker](https://docs.docker.com/get-started/get-docker/)
 
 - The **AWS CLI** is installed and configured. see: [AWS CLI install and update instructions](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions)
 
@@ -56,9 +56,9 @@ cdk bootstrap
 pnpm run deploy
 ```
 
-Upon deployment a pre-deploy script will run to initialize or update the required ECR repository and deploy the imgproxy Docker to it.
+Upon running `pnpm run deploy`, a pre-deploy script will run to create the required ECR repository and deploy the latest imgproxy Docker container image to it.
 
-After the CDK Deploy process is succesful, a post-deploy script will handle initialization of imgproxy signing parameters (if enabled) and sync configuration values from `.imgproxy.env` to SSM Parameters accessible by the Lambda Function.
+After the CDK Deploy process is successful, a post-deploy script will handle initialization of imgproxy signing parameters (if enabled) and sync configuration values from `.imgproxy.env` to SSM Parameters accessible by the Lambda Function.
 
 Finally, deployment details will be output including the domain of the CloudFront distribution and the name of the default S3 buckets. A number of example URLs will also be generated for the sample images included in the project.
 
@@ -69,7 +69,7 @@ Finally, deployment details will be output including the domain of the CloudFron
 
 #### Stack
 
-To customize the deployment copy the `.env.sample` to `.env` and edit the settings as needed.
+To customize the deployment copy the included `.env.sample` to `.env` and edit the settings as needed.
 
 ```shell
 cp .env.sample .env
