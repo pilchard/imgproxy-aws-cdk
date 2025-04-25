@@ -37,12 +37,11 @@
 		"@biomejs/biome": "^1.9.4",
 		"@parcel/config-default": "^2.14.4",
 		"@parcel/plugin": "^2.14.4",
-		"@pilchard/aws-cloudfront-function": "link:../aws-cloudfront-function",
+		"@pilchard/aws-cloudfront-function": "github:pilchard/aws-cloudfront-function",
 		"@types/aws-lambda": "^8.10.149",
 		"@types/node": "22.13.5",
 		"@types/prompts": "^2.4.9",
 		"ansis": "^3.17.0",
-		"cloudfront": "link:functions/url-rewrite/__mocks__/cloudfront",
 		"dotenv": "^16.5.0",
 		"execa": "^9.5.2",
 		"parcel": "^2.14.4",
@@ -50,15 +49,15 @@
 		"ts-node": "^10.9.2",
 		"tsx": "^4.19.3",
 		"typescript": "5.8.2",
-		"vite": "^6.3.2",
-		"vitest": "^3.1.1"
+		"vite": "^6.3.3",
+		"vitest": "^3.1.2"
 	},
 	"dependencies": {
-		"aws-cdk": "2.1010.0",
-		"aws-cdk-lib": "2.190.0",
-		"constructs": "10.4.2",
-		"source-map-support": "^0.5.21",
-		"cloudfront": "link:functions/url-rewrite/__mocks__/cloudfront"
+		"aws-cdk": "^2.1012.0",
+		"aws-cdk-lib": "^2.192.0",
+		"cloudfront": "link:functions/url-rewrite/__mocks__/cloudfront",
+		"constructs": "^10.4.2",
+		"source-map-support": "^0.5.21"
 	},
 	"packageManager": "pnpm@9.15.4+sha512.b2dc20e2fc72b3e18848459b37359a32064663e5627a51e4c74b2c29dd8e8e0491483c3abb40789cfd578bf362fb6ba8261b05f0387d76792ed6e23ea3b1b6a0"
 }
