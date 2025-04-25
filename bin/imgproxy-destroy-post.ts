@@ -1,4 +1,4 @@
-import { bgBlueBright, blueBright, cyanBright, greenBright, red, white } from "ansis";
+import { bgBlueBright, cyanBright, greenBright, red, white } from "ansis";
 import { $, ExecaError } from "execa";
 import prompts from "prompts";
 import { getConfig, type ConfigProps } from "./config.ts";
