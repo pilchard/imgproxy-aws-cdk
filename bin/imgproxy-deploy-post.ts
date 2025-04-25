@@ -1,4 +1,4 @@
-import { bgBlueBright, blueBright, cyan, cyanBright, greenBright, red, white, whiteBright, yellowBright } from "ansis";
+import { bgBlueBright, bgWhite, blueBright, cyan, greenBright, red, white, yellowBright } from "ansis";
 import { aws_ssm as ssm } from "aws-cdk-lib";
 import { parse } from "dotenv";
 import { $, ExecaError } from "execa";
@@ -155,7 +155,7 @@ async function _rectifySigningValue(
 
 	if (retrievedSigningValue !== undefined && retrievedSigningValue !== signingValue) {
 		console.log(
-			cyanBright`\nAn existing ${parameterName} parameter was retrieved from AWS that differs from that specified by the environment.`,
+			cyan`\nAn existing ${parameterName} parameter was retrieved from AWS that differs from that specified by the environment.`,
 		);
 		const { confirmKeepRetrieved } = await prompts({
 			type: "confirm",
@@ -169,9 +169,7 @@ async function _rectifySigningValue(
 	}
 
 	if (signingValue === undefined) {
-		console.log(
-			cyanBright`\nURL signing is enabled but no ${parameterName} value is specified by the environment.`,
-		);
+		console.log(cyan`\nURL signing is enabled but no ${parameterName} value is specified by the environment.`);
 
 		const { confirmGenerate } = await prompts({
 			type: "confirm",
@@ -237,7 +235,7 @@ async function rectifySsmParameters(
 		message: "Continue with SSM Parameter updates?",
 		onRender() {
 			if (!Array.isArray(this)) {
-				this.message = cyanBright`Continue with SSM Parameter updates?`;
+				this.message = cyan`Continue with SSM Parameter updates?`;
 			}
 		},
 	});
@@ -255,13 +253,13 @@ async function updateSsmParameters(state: ParameterStateObject, secureParameters
 	const deleteParams: string[] = [];
 	for (const [parameterPath, { param, curr, next }] of Object.entries(state)) {
 		if (next === undefined) {
-			deleteParams.push(parameterPath);
+			if (curr !== undefined) deleteParams.push(parameterPath);
 		} else if (curr !== next) {
 			try {
 				const parameterType = secureParameters.includes(param)
 					? ssm.ParameterType.SECURE_STRING
 					: ssm.ParameterType.STRING;
-				console.log(greenBright`\n${parameterPath}`);
+				console.log(greenBright`\n+ ${parameterPath}`);
 				await _putParameter(parameterPath, next, parameterType, ssm.ParameterTier.STANDARD, true);
 			} catch (error) {
 				console.error(`Failed to ${curr !== undefined ? "update" : "create"} parameter: ${parameterPath}`);
@@ -269,15 +267,14 @@ async function updateSsmParameters(state: ParameterStateObject, secureParameters
 		}
 	}
 
-	try {
-		for (const param of deleteParams) {
-			console.log(red`\n- ${param}`);
-			const { stdout: deletedParam } = await $`aws ssm delete-parameter --name ${param}`;
+	for (const parameterPath of deleteParams) {
+		console.log(red`\n- ${parameterPath}`);
+		try {
+			const { stdout: deletedParam } = await $`aws ssm delete-parameter --name ${parameterPath}`;
 			console.log(deletedParam);
+		} catch (err) {
+			console.error(red`Failed to delete parameter: ${white`${parameterPath}`}`);
 		}
-		// await $`aws ssm delete-parameters --names ${deleteParams.join(" ")}`;
-	} catch (err) {
-		console.error(`Failed to delete parameters: \n\t${deleteParams.join("\n\t")}`);
 	}
 }
 
@@ -341,19 +338,17 @@ async function _putParameter(
 	overwrite = false,
 ) {
 	try {
-		const { stdout } = await $`aws ssm put-parameter \
+		const { stdout: putResultJson } = await $`aws ssm put-parameter \
 	            --name ${key} \
 	            --value ${value} \
 	            --type ${type} \
 	            --tier ${tier} \
+				--output json \
 				${overwrite ? "--overwrite" : ""}`;
-
-		console.log(stdout);
+		const { Version }: { Version: string; Tier: string; } = JSON.parse(putResultJson);
+		console.log(white`  ${type} v. ${Version}`);
 	} catch (error) {
-		if (error instanceof ExecaError) {
-			console.error(error.message);
-			console.error(error.cause);
-		}
+		console.error(red`Failed to create parameter: ${white`${key}`}`);
 	}
 }
 
@@ -377,9 +372,9 @@ async function logOutput(deployOutputs: ImgproxyStackDeployOutputs, signingOptio
 
 			const { Contents: defaultObjectPaths } = JSON.parse(s3ObjectListJson);
 
-			console.log("Sample links");
+			console.log(bgWhite`\nSample links`);
 			for (const { Key: objectUri } of defaultObjectPaths) {
-				console.log(whiteBright.underline`\n${objectUri}\n`);
+				console.log(white.underline`\n${objectUri}\n`);
 
 				// s3://imgproxy-stack-imgproxystackimgproxybucket21397567-5riy5cmwkypo/imgproxy/default/Imgproxy Stack_1080x1920.png
 				const s3Uri = `s3://${deployOutputs.DefaultImgproxyBucketName}/${objectUri}`;
@@ -406,7 +401,7 @@ async function logOutput(deployOutputs: ImgproxyStackDeployOutputs, signingOptio
 			}
 		}
 
-		console.log("\nDeploy outputs\n");
+		console.log(bgWhite`\nDeploy outputs\n`);
 		console.log(deployOutputs);
 	} catch (error) {
 		if (error instanceof ExecaError) {
