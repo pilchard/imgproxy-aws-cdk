@@ -97,8 +97,6 @@ export async function postDestroy() {
 		} else {
 			console.log(red`ECR Repository deletion aborted\n`);
 		}
-
-		console.log(blueBright`\nImgproxy post-destroy complete`);
 	} catch (error) {
 		if (error instanceof ExecaError) {
 			console.error(error.message);

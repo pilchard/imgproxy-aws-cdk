@@ -196,7 +196,7 @@ export async function preDeploy() {
 			const { stdout: awsDockerAuthResult } = await $`aws ecr get-login-password --region ${CDK_DEPLOY_REGION}`
 				.pipe`docker login --username AWS --password-stdin ${CDK_DEPLOY_ACCOUNT}.dkr.ecr.${CDK_DEPLOY_REGION}.amazonaws.com`;
 
-			console.log(greenBright`  ${awsDockerAuthResult}`);
+			console.log(greenBright`${awsDockerAuthResult}`);
 
 			// Check for existing local Docker container image
 			console.log("\nChecking local Docker images...");
@@ -236,7 +236,7 @@ export async function preDeploy() {
 				})`docker tag ${ECR_DOCKER_IMAGE_PATH} ${awsEcrImagePath}`;
 
 				console.log(greenBright`Successfully tagged image`);
-				console.log(white`${ECR_DOCKER_IMAGE_PATH} → ${awsEcrImagePath}`);
+				console.log(white`\n  ${ECR_DOCKER_IMAGE_PATH} → ${awsEcrImagePath}`);
 			}
 
 			/** 4. Push the tagged image to the ECR repository
@@ -245,10 +245,10 @@ export async function preDeploy() {
 			 * docker push 123456789.dkr.ecr.us-east-1.amazonaws.com/imgproxy:latest
 			 * ```
 			 */
-			console.log("\nPushing image to ECR...");
+			console.log("\nPushing image to ECR...\n");
 			await $({ stdout: "inherit", stderr: "inherit" })`docker push ${awsEcrImagePath}`;
 
-			console.log(greenBright`\nSuccessfully deployed imgproxy Docker image`);
+			console.log(greenBright`\nSuccessfully deployed imgproxy Docker image\n`);
 		}
 
 		console.log(`  Docker image path: ${ECR_DOCKER_IMAGE_PATH}`);
