@@ -39,7 +39,15 @@ cp .imgproxy.env.sample .imgproxy.env
 > [!TIP]
 > Set the `CDK_DEPLOY_PROFILE` value in `.env` to read the deploy target `account` and `region` from a non-default profile in `~/.aws/config`.
 
-#### 3. Bootstrap CDK environment and deploy
+#### 3. Build
+
+The build script will typecheck the project and package the optional URL-rewrite CloudFront Function for deployment.
+
+```terminal
+pnpm run build
+```
+
+#### 4. Bootstrap CDK environment and deploy
 
 ```terminal
 cdk bootstrap
