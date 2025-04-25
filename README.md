@@ -139,9 +139,9 @@ The image tag you push here should match the one created in the prior command.
 docker push 123456789.dkr.ecr.us-east-1.amazonaws.com/imgproxy:latest
 ```
 
-##### Reference Resources
+##### Reference
 
-AWS documentation: [Pushing a Docker image to an Amazon ECR private repository](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html)
+AWS documentation: [Pushing a Docker image to an Amazon ECR private repository](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html)\
 Imgproxy blog: [(Almost) free image processing with imgproxy and AWS Lambda](https://imgproxy.net/blog/almost-free-image-processing-with-imgproxy-and-aws-lambda/).
 
 ## License
