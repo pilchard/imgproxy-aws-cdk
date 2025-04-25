@@ -157,7 +157,7 @@ export async function preDeploy() {
 
 				const { stdout: _imgproxyEcrRepoLifecyclePoliciesJson } = await $`aws ecr put-lifecycle-policy \
             		--repository-name ${ECR_REPOSITORY_NAME} \
-            		--lifecycle-policy-text '${JSON.stringify({ rules: ecrLifecyclePolicyRules })}'`;
+            		--lifecycle-policy-text ${JSON.stringify({ rules: ecrLifecyclePolicyRules })}`;
 
 				console.log(greenBright`Successfully created ECR repository`);
 			}
@@ -168,6 +168,8 @@ export async function preDeploy() {
 		}
 
 		console.log("\nChecking images...");
+		const awsEcrImagePath =
+			`${CDK_DEPLOY_ACCOUNT}.dkr.ecr.${CDK_DEPLOY_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}:${ECR_IMAGE_TAG}`;
 
 		const { stdout: existingImageJson } = await $`aws ecr batch-get-image \
     				--repository-name ${ECR_REPOSITORY_NAME} \
@@ -178,82 +180,77 @@ export async function preDeploy() {
 
 		if (existingImageArr.length) {
 			console.log(greenBright`Image with tag '${ECR_IMAGE_TAG}' found`);
+		} else {
+			console.log(yellowBright`Image with tag '${ECR_IMAGE_TAG}' not found`);
+			console.log("\nDeploying new ECR image...");
 
-			console.log(blueBright`\nImgproxy pre-deploy complete`);
-			return;
+			/** 1. Authenticate your Docker client with the ECR registry
+			 * Replace all instances of region (us-east-1) and account ID (123456789) with your actual region and account ID
+			 *
+			 * ```shell
+			 * aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789.dkr.ecr.us-east-1.amazonaws.com
+			 * ```
+			 */
+			console.log("\nAuthenticating Docker...");
+
+			const { stdout: awsDockerAuthResult } = await $`aws ecr get-login-password --region ${CDK_DEPLOY_REGION}`
+				.pipe`docker login --username AWS --password-stdin ${CDK_DEPLOY_ACCOUNT}.dkr.ecr.${CDK_DEPLOY_REGION}.amazonaws.com`;
+
+			console.log(greenBright`  ${awsDockerAuthResult}`);
+
+			// Check for existing local Docker container image
+			console.log("\nChecking local Docker images...");
+			const { stdout: localImageResultJson } = await $`docker images ${awsEcrImagePath} --format json`;
+
+			let localImageExists = false;
+			if (localImageResultJson.length) {
+				const { Repository, Tag } = JSON.parse(localImageResultJson);
+				localImageExists = `${Repository}:${Tag}` === awsEcrImagePath;
+			}
+
+			if (localImageExists) {
+				console.log(greenBright`Local Docker image found with path '${awsEcrImagePath}'`);
+			} else {
+				console.log(yellowBright`No local Docker image found with path '${awsEcrImagePath}'`);
+
+				/** 2. Pull the imgproxy Docker image
+				 *
+				 * ```shell
+				 * docker pull ghcr.io/imgproxy/imgproxy:latest-arm64
+				 * ```
+				 */
+				console.log("\nPulling Docker imgproxy image...");
+				await $({ stdout: "inherit", stderr: "inherit" })`docker pull ${ECR_DOCKER_IMAGE_PATH}`;
+
+				/** 3. Tag the pulled Docker image for ECR
+				 * The AWS tag structure is as follows:`<account_id>.dkr.ecr.<region>.amazonaws.com/<ecr_repo_name>:<ecr_image_tag>`. Replace each of these with the relevant values for your deployment making sure that the ECR Repository name matches the ECR repository that exists in your account.
+				 *
+				 * ```shell
+				 * docker tag ghcr.io/imgproxy/imgproxy:latest-arm64 123456789.dkr.ecr.us-east-1.amazonaws.com/imgproxy:latest
+				 * ```
+				 */
+				console.log("\nTagging image for AWS...");
+				await $({
+					stdout: "inherit",
+					stderr: "inherit",
+				})`docker tag ${ECR_DOCKER_IMAGE_PATH} ${awsEcrImagePath}`;
+
+				console.log(greenBright`Successfully tagged image`);
+				console.log(white`${ECR_DOCKER_IMAGE_PATH} → ${awsEcrImagePath}`);
+			}
+
+			/** 4. Push the tagged image to the ECR repository
+			 *
+			 * ```shell
+			 * docker push 123456789.dkr.ecr.us-east-1.amazonaws.com/imgproxy:latest
+			 * ```
+			 */
+			console.log("\nPushing image to ECR...");
+			await $({ stdout: "inherit", stderr: "inherit" })`docker push ${awsEcrImagePath}`;
+
+			console.log(greenBright`\nSuccessfully deployed imgproxy Docker image`);
 		}
 
-		console.log(yellowBright`Image with tag '${ECR_IMAGE_TAG}' not found`);
-		console.log("\nDeploying new ECR image...");
-
-		/** 1. Authenticate your Docker client with the ECR registry
-		 * Replace all instances of region (us-east-1) and account ID (123456789) with your actual region and account ID
-		 *
-		 * ```shell
-		 * aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789.dkr.ecr.us-east-1.amazonaws.com
-		 * ```
-		 */
-		console.log("\nAuthenticating Docker...");
-
-		const { stdout: awsDockerAuthResult } = await $`aws ecr get-login-password --region ${CDK_DEPLOY_REGION}`
-			.pipe`docker login --username AWS --password-stdin ${CDK_DEPLOY_ACCOUNT}.dkr.ecr.${CDK_DEPLOY_REGION}.amazonaws.com`;
-
-		console.log(greenBright`${awsDockerAuthResult}`);
-
-		/** 2. Pull the imgproxy Docker image
-		 *
-		 * ```shell
-		 * docker pull ghcr.io/imgproxy/imgproxy:latest-arm64
-		 * ```
-		 */
-		const awsEcrImagePath =
-			`${CDK_DEPLOY_ACCOUNT}.dkr.ecr.${CDK_DEPLOY_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}:${ECR_IMAGE_TAG}`;
-
-		console.log("\nChecking local Docker images...");
-		const { stdout: localImageResultJson } = await $`docker images ${awsEcrImagePath} --format json`;
-
-		let localImageExists = false;
-		if (localImageResultJson.length) {
-			const { Repository, Tag } = JSON.parse(localImageResultJson);
-			localImageExists = `${Repository}:${Tag}` === awsEcrImagePath;
-		}
-
-		if (localImageExists) {
-			console.log(greenBright`Local Docker image found with path '${awsEcrImagePath}'`);
-
-			console.log(blueBright`\nImgproxy pre-deploy complete`);
-			return;
-		}
-
-		console.log(yellowBright`No local Docker image found with path '${awsEcrImagePath}'`);
-
-		console.log("\nPulling imgproxy image...");
-		await $({ stdout: "inherit", stderr: "inherit" })`docker pull ${ECR_DOCKER_IMAGE_PATH}`;
-
-		/** 3. Tag the pulled Docker image for ECR
-		 * The AWS tag structure is as follows:`<account_id>.dkr.ecr.<region>.amazonaws.com/<ecr_repo_name>:<ecr_image_tag>`. Replace each of these with the relevant values for your deployment making sure that the ECR Repository name matches the ECR repository that exists in your account.
-		 *
-		 * ```shell
-		 * docker tag ghcr.io/imgproxy/imgproxy:latest-arm64 123456789.dkr.ecr.us-east-1.amazonaws.com/imgproxy:latest
-		 * ```
-		 */
-		console.log("\nTagging image for AWS...");
-		await $({ stdout: "inherit", stderr: "inherit" })`docker tag ${ECR_DOCKER_IMAGE_PATH} ${awsEcrImagePath}`;
-
-		console.log(greenBright`Successfully tagged image`);
-		console.log(white`  ${ECR_DOCKER_IMAGE_PATH} → ${awsEcrImagePath}`);
-		/** 4. Push the tagged image to the ECR repository
-		 *
-		 * ```shell
-		 * docker push 123456789.dkr.ecr.us-east-1.amazonaws.com/imgproxy:latest
-		 * ```
-		 */
-		console.log("\nPushing image to ECR...");
-		await $({ stdout: "inherit", stderr: "inherit" })`docker push ${awsEcrImagePath}`;
-
-		console.log(greenBright`Successfully deployed imgproxy Docker image`);
-
-		console.log(blueBright`\nImgproxy pre-deploy complete\n`);
 		console.log(`  Docker image path: ${ECR_DOCKER_IMAGE_PATH}`);
 		console.log(`  ECR image path: ${awsEcrImagePath}`);
 		console.log(`  ECR repository arn: ${imgproxyEcrRepository.repositoryArn}`);
