@@ -28,6 +28,8 @@ pnpm install
 
 #### 2. Copy sample `.env` files into place
 
+Edit these configuration files to customize the deployment. The stack will deploy using the same reasonable default values if these files are not found or if they are copied into place but not edited.
+
 ```terminal
 cp .env.sample .env
 cp .imgproxy.env.sample .imgproxy.env
@@ -54,11 +56,14 @@ cdk bootstrap
 pnpm run deploy
 ```
 
-A pre-deploy script will run to initialize or update the ECR repository.
+Upon deployment a pre-deploy script will run to initialize or update the required ECR repository and deploy the imgproxy Docker to it.
 
-A post-deploy script will handle initialization of imgproxy signing parameters and sync configuration values from `.imgproxy.env` to SSM Parameters accessible by the Lambda Function.
+After the CDK Deploy process is succesful, a post-deploy script will handle initialization of imgproxy signing parameters (if enabled) and sync configuration values from `.imgproxy.env` to SSM Parameters accessible by the Lambda Function.
 
-Upon completion, deployment details will be output in the terminal including demo links for the sample images included in the stack, as well as stack outputs such as the domain of the CloudFront distribution and the name of the default S3 bucket.
+Finally, deployment details will be output including the domain of the CloudFront distribution and the name of the default S3 buckets. A number of example URLs will also be generated for the sample images included in the project.
+
+> [!NOTE]
+> The first sample URL to be opened may take several seconds to load as the Lambda cold starts after the deploy. Subsequent links should open immediately.
 
 ## Configuration
 
