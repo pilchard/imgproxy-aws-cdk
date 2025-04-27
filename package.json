@@ -29,6 +29,7 @@
 		"destroy": "cdk destroy --force",
 		"postdestroy": "tsx ./bin/imgproxy-destroy-post.ts ",
 		"typecheck": "tsc --noEmit",
+		"bootstrap": "cdk bootstrap",
 		"build": "pnpm run typecheck && rm -rf ./.dist && pnpm run build:parcel",
 		"build:parcel": "parcel build",
 		"test:functions": "vitest"

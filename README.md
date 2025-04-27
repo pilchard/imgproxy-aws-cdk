@@ -52,7 +52,7 @@ pnpm run build
 #### 4. Bootstrap CDK environment and deploy
 
 ```terminal
-cdk bootstrap
+pnpm run bootstrap
 pnpm run deploy
 ```
 
