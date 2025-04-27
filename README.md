@@ -16,43 +16,39 @@ Before proceeding with deployment ensure the following:
 
 - The **AWS CLI** is installed and configured. see: [AWS CLI install and update instructions](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions)
 
-### Deploy
+### Quickstart
 
-#### 1. Pull repository and install node modules
-
-```terminal
+```shell
+# Clone the repository
 git clone https://github.com/pilchard/imgproxy-aws-cdk.git
+
+# Change directory
 cd imgproxy-aws-cdk
+
+# Install dependencies
 pnpm install
-```
 
-#### 2. Copy sample `.env` files into place
-
-Edit these configuration files to customize the deployment. The stack will deploy using the same reasonable default values if these files are not found or if they are copied into place but not edited.
-
-```terminal
+# Clone .env.sample
 cp .env.sample .env
+
+# Configure the deploy destination in .env
+# Set the AWS SSO profile name
+echo CDK_DEPLOY_PROFILE=DeployProfile >> .env
+# -- OR -- 
+# Set the AWS deploy account and region
+echo CDK_DEPLOY_ACCOUNT=000111222333 >> .env
+echo CDK_DEPLOY_REGION=us-east-1 >> .env
+
+# Clone .imgproxy.env.sample [optional]
 cp .imgproxy.env.sample .imgproxy.env
-```
 
-> [!NOTE]
-> Deploying without editing `.env` will read deploy target `account` and `region` from the default profile in `~/.aws/config` (the default profile may be overridden by `AWS_PROFILE` if it is set).
-
-> [!TIP]
-> Set the `CDK_DEPLOY_PROFILE` value in `.env` to read the deploy target `account` and `region` from a non-default profile in `~/.aws/config`.
-
-#### 3. Build
-
-The build script will typecheck the project and package the optional URL-rewrite CloudFront Function for deployment.
-
-```terminal
+# Typecheck the project and package optional CloudFront Function
 pnpm run build
-```
 
-#### 4. Bootstrap CDK environment and deploy
-
-```terminal
+# Bootstrap the AWS CDK
 pnpm run bootstrap
+
+# Deploy stack
 pnpm run deploy
 ```
 
@@ -61,6 +57,9 @@ Upon running `pnpm run deploy`, a pre-deploy script will run to create the requi
 After the CDK Deploy process is successful, a post-deploy script will handle initialization of imgproxy signing parameters (if enabled) and sync configuration values from `.imgproxy.env` to SSM Parameters accessible by the Lambda Function.
 
 Finally, deployment details will be output including the domain of the CloudFront distribution and the name of the default S3 buckets. A number of example URLs will also be generated for the sample images included in the project.
+
+> [!IMPORTANT]
+> Deploying without editing `.env` will attempt to read deploy target `account` and `region` from the default profile in `~/.aws/config` (the default profile may be overridden by `AWS_PROFILE` if it is set).
 
 > [!NOTE]
 > The first sample URL to be opened may take several seconds to load as the Lambda cold starts after the deploy. Subsequent links should open immediately.
@@ -74,6 +73,9 @@ To customize the deployment copy the included `.env.sample` to `.env` and edit t
 ```shell
 cp .env.sample .env
 ```
+
+> [!TIP]
+> Set the `CDK_DEPLOY_PROFILE` value in `.env` to read the deploy target `account` and `region` from a non-default profile in `~/.aws/config`.
 
 #### Imgproxy Lambda
 
